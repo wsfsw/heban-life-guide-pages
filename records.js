@@ -4,10 +4,10 @@ import { formatWhen } from './logic.js';
 import { askAssistant } from './assistant-client.js';
 
 const scenes = {
-  parcel: { name: '快递和取件', guide: 'guide/parcel', action: '看快递柜取件指引' },
-  bill: { name: '缴费和账单', guide: 'guide/bill', action: '看查电费指引' },
-  device: { name: '设备和按键', guide: 'devices', action: '看设备使用指引' },
-  other: { name: '其他生活场景', guide: 'guides', action: '查看生活操作指引' },
+  parcel: { name: '快递和取件', guide: 'guide/parcel', action: '看看怎么取快递' },
+  bill: { name: '缴费和账单', guide: 'guide/bill', action: '看看怎么查电费' },
+  device: { name: '设备和按键', guide: 'devices', action: '看看家电怎么用' },
+  other: { name: '其他生活场景', guide: 'guides', action: '看看操作步骤' },
 };
 
 export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog, closeDialog, notify, isGuest }) {
@@ -55,11 +55,11 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
   }
 
   const captureLink = '<a class="button quiet" href="#/records">我的记录</a>';
-  const help = () => `<p class="capture-help">拍清楚卡住的画面，避开取件码和账号。${isGuest() ? '照片保存在当前浏览器。' : '照片只保存在您的账户。'}</p>`;
+  const help = () => `<p class="capture-help">请别拍到取件码、账号或验证码。${isGuest() ? '点「保存照片」后，可以在这个浏览器里查看。' : '点「保存照片」后，可以在您的账户里查看。'}</p>`;
   const filePicker = (id, label, native = false) => `<input type="file" id="${id}" class="capture-file" accept="image/*" ${native ? 'capture="environment"' : ''}><label for="${id}" class="button quiet capture-file-label">${icon(native ? 'camera' : 'photo', 21)}${label}</label>`;
 
   function analysisPanel(result, analyzing) {
-    if (analyzing) return '<p class="analysis-panel" role="status">禾伴正在看照片…</p>';
+    if (analyzing) return '<p class="analysis-panel" role="status">助手正在看照片…</p>';
     if (!result) return '';
     const spoken = [result.observation, ...result.steps, result.verify].filter(Boolean).join('。');
     return `<section class="analysis-panel" aria-labelledby="capture-analysis">
@@ -84,17 +84,17 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
       const saving = mode === 'saving';
       const analyzing = mode === 'analyzing';
       const disabled = mode !== 'review' ? 'disabled' : '';
-      body = `<img class="capture-frame" src="${photo}" alt="您要保存的现场照片">
+      body = `<img class="capture-frame" src="${photo}" alt="您选的照片">
         <form class="capture-form" data-form="scene-record">
-          <label for="record-scene">这是什么场景？</label>
+          <label for="record-scene">照片是关于什么的？</label>
           <select id="record-scene" name="scene" ${disabled}>
             ${Object.entries(scenes).map(([key, item]) => `<option value="${key}" ${key === scene ? 'selected' : ''}>${item.name}</option>`).join('')}
           </select>
           <label for="record-note">您想做什么？（选填）</label>
           <textarea id="record-note" name="note" maxlength="140" rows="2" placeholder="例如：想把空调调到制冷" ${disabled}>${escapeHtml(note)}</textarea>
-          <p class="form-help">选择分析时，照片和这句话会发送给 DeepSeek。</p>
+          <p class="form-help">点「请助手看看」，照片和您填的话会发给 DeepSeek。</p>
           <div class="capture-actions">
-          <button id="capture-analyze" class="button" type="submit" value="analyze" ${disabled}>${analyzing ? '正在分析…' : '分析这张照片'}</button>
+          <button id="capture-analyze" class="button" type="submit" value="analyze" ${disabled}>${analyzing ? '正在看照片…' : '请助手看看'}</button>
           <button id="capture-save" class="button quiet" type="submit" value="save" ${disabled}>${saving ? '正在保存…' : '保存照片'}</button>
           <button class="button quiet" type="button" data-action="capture-reset" ${disabled}>重拍或换一张</button></div>
         </form>
@@ -113,8 +113,8 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
         </div>
       </section>`;
     }
-    return `${pageHeader('拍照分析', back)}<main class="surface capture-screen">
-      <div class="capture-intro"><div><h2>${reviewing ? '确认这张照片' : '拍下眼前的画面'}</h2>${help()}</div>${captureLink}</div>
+    return `${pageHeader('拍照问一问', back)}<main class="surface capture-screen">
+      <div class="capture-intro"><div><h2>${reviewing ? '先看一眼照片' : '拍清楚按键或屏幕'}</h2>${help()}</div>${captureLink}</div>
       ${error && !reviewing ? `<p class="capture-error" role="alert">${escapeHtml(error)}</p>` : ''}
       ${body}
     </main>`;
@@ -122,7 +122,7 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
 
   function recordsScreen() {
     return `${pageHeader('我的记录', 'mine')}<main class="surface capture-screen">
-      <div class="capture-intro"><div><h2>现场照片</h2><p class="capture-help">${isGuest() ? '这些照片保存在当前浏览器。' : '只有您登录后可以查看。'}</p></div><a class="button" href="#/capture">${icon('camera', 22)}拍照分析</a></div>
+      <div class="capture-intro"><div><h2>保存的照片</h2><p class="capture-help">${isGuest() ? '这些照片保存在当前浏览器。' : '只有您登录后可以查看。'}</p></div><a class="button" href="#/capture">${icon('camera', 22)}拍照问一问</a></div>
       ${view.loading ? '<p role="status" class="empty-card">正在读取记录…</p>'
         : view.error ? retry()
         : !view.records.length ? '<p class="empty-card">还没有照片。遇到不会操作的画面，可以拍一张留着。</p>'
@@ -238,7 +238,7 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
   async function analyze(data, chosen) {
     const current = view;
     if (current?.mode !== 'review') return;
-    Object.assign(current, { mode: 'analyzing', scene: data.get('scene'), note: (chosen ?? data.get('note')).trim(), error: '' });
+    Object.assign(current, { mode: 'analyzing', scene: data.get('scene'), note: (chosen ?? data.get('note')).trim(), error: '', analysis: null });
     redraw(current);
     try {
       const { analysis } = await askAssistant({ text: current.note, photo: current.photo });

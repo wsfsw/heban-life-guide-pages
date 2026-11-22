@@ -1,8 +1,8 @@
 // logic.js
 var personas = {
-  "\u5C0F\u79BE": { label: "\u6E29\u548C\u966A\u804A", prefix: "\u6162\u6162\u6765\uFF0C", preview: "\u60A8\u597D\uFF0C\u6211\u662F\u5C0F\u79BE\u3002\u60A8\u6162\u6162\u8BF4\uFF0C\u6211\u4EEC\u4E00\u6B65\u4E00\u6B65\u6765\u3002" },
-  "\u5C0F\u677E": { label: "\u8BF4\u8BDD\u7B80\u6D01", prefix: "", preview: "\u60A8\u597D\uFF0C\u6211\u662F\u5C0F\u677E\u3002\u60A8\u8BF4\u8981\u505A\u4EC0\u4E48\uFF0C\u6211\u5E2E\u60A8\u627E\u4E0B\u4E00\u6B65\u3002" },
-  "\u6696\u6696": { label: "\u6D3B\u6CFC\u4EB2\u5207", prefix: "\u597D\u5440\uFF0C", preview: "\u60A8\u597D\uFF0C\u6211\u662F\u6696\u6696\u3002\u4ECA\u5929\u60F3\u804A\u70B9\u4EC0\u4E48\uFF1F" }
+  "\u5C0F\u79BE": { label: "\u6E29\u548C\u966A\u804A", preview: "\u60A8\u597D\uFF0C\u6211\u662F\u5C0F\u79BE\u3002\u60A8\u6162\u6162\u8BF4\uFF0C\u6211\u4EEC\u4E00\u6B65\u4E00\u6B65\u6765\u3002" },
+  "\u5C0F\u677E": { label: "\u8BF4\u8BDD\u7B80\u6D01", preview: "\u60A8\u597D\uFF0C\u6211\u662F\u5C0F\u677E\u3002\u60A8\u8BF4\u8981\u505A\u4EC0\u4E48\uFF0C\u6211\u5E2E\u60A8\u627E\u4E0B\u4E00\u6B65\u3002" },
+  "\u6696\u6696": { label: "\u6D3B\u6CFC\u4EB2\u5207", preview: "\u60A8\u597D\uFF0C\u6211\u662F\u6696\u6696\u3002\u4ECA\u5929\u60F3\u804A\u70B9\u4EC0\u4E48\uFF1F" }
 };
 var speechRates = {
   slow: { label: "\u6162", value: 0.7 },
@@ -103,26 +103,11 @@ function parseReminder(text, now = Date.now()) {
   const title = source.replace(time[0], "").replace(day?.[0] || "", "").replace(part?.[0] || "", "").replace("\u6BCF\u5929", "").replace(/^(?:请|帮我|记得|给我|设置|一个|提醒我|叫我|提醒|要|去|在|[\s,，。:：])+/g, "").replace(/[\s,，。!！]+$/g, "").trim();
   return { title, at: date.getTime(), repeat };
 }
-var topics = [
-  { title: "\u600E\u4E48\u67E5\u7535\u8D39\uFF1F", tags: /电费|水费|燃气费|缴费|账单/, answer: "\u8BF7\u4ECE\u60A8\u5E73\u65F6\u4F7F\u7528\u7684\u4F9B\u7535\u670D\u52A1\u6216\u5FAE\u4FE1\u91CC\u7684\u751F\u6D3B\u7F34\u8D39\u5165\u53E3\u67E5\u8D26\u5355\u3002\u5148\u786E\u8BA4\u4F4F\u5740\u548C\u6237\u53F7\u3002\u53EA\u60F3\u67E5\u8BE2\u7684\u8BDD\uFF0C\u770B\u5230\u8D26\u5355\u5C31\u53EF\u4EE5\u505C\u4E0B\u3002\u77ED\u4FE1\u91CC\u7684\u7F34\u8D39\u94FE\u63A5\u53EF\u4EE5\u5148\u653E\u4E00\u653E\uFF0C\u81EA\u5DF1\u6253\u5F00\u719F\u6089\u7684\u5165\u53E3\u6838\u5BF9\u3002" },
-  { title: "\u600E\u4E48\u53EB\u8F66\uFF1F", tags: /叫车|打车|出租|公交|出门/, answer: "\u5148\u5B9A\u4E00\u4E2A\u53F8\u673A\u5BB9\u6613\u627E\u5230\u7684\u4E0A\u8F66\u70B9\uFF0C\u6BD4\u5982\u5C0F\u533A\u5927\u95E8\u6216\u4FBF\u5229\u5E97\u3002\u53EF\u4EE5\u6253\u5F00\u60A8\u5E73\u65F6\u7528\u7684\u6253\u8F66\u5DE5\u5177\uFF0C\u4E5F\u53EF\u4EE5\u95EE\u793E\u533A\u4FBF\u6C11\u70B9\u6709\u6CA1\u6709\u672C\u5730\u7684\u7535\u8BDD\u53EB\u8F66\u670D\u52A1\u3002\u4E0A\u8F66\u524D\u5BF9\u4E00\u4E0B\u8F66\u724C\u3002" },
-  { title: "\u600E\u4E48\u653E\u5927\u624B\u673A\u5B57\u4F53\uFF1F", tags: /字体|大字|字太小/, answer: "\u6253\u5F00\u624B\u673A\u7684\u300C\u8BBE\u7F6E\u300D\uFF0C\u5728\u4E0A\u65B9\u641C\u7D22\u300C\u5B57\u4F53\u5927\u5C0F\u300D\u3002\u627E\u5230\u540E\uFF0C\u6162\u6162\u628A\u6ED1\u5757\u5F80\u53F3\u79FB\uFF0C\u9009\u5230\u770B\u6E05\u695A\u53C8\u8212\u670D\u7684\u5927\u5C0F\u3002\u4E0D\u540C\u624B\u673A\u7684\u83DC\u5355\u540D\u79F0\u53EF\u80FD\u6709\u70B9\u4E0D\u4E00\u6837\u3002" },
-  { title: "\u600E\u4E48\u8FDE\u63A5\u5BB6\u91CC\u7684 Wi-Fi\uFF1F", tags: /wifi|wi-fi|网络|无线/i, answer: "\u6253\u5F00\u624B\u673A\u300C\u8BBE\u7F6E\u300D\uFF0C\u627E\u300C\u65E0\u7EBF\u5C40\u57DF\u7F51\u300D\u6216\u300CWLAN\u300D\uFF0C\u70B9\u5BB6\u91CC\u7684\u7F51\u7EDC\u540D\u5B57\uFF0C\u7136\u540E\u8F93\u5165\u5BB6\u91CC\u7684\u5BC6\u7801\u3002\u8F93\u5BC6\u7801\u65F6\u7559\u610F\u5927\u5C0F\u5199\u3002" },
-  { title: "\u9644\u8FD1\u6709\u4EC0\u4E48\u793E\u533A\u6D3B\u52A8\uFF1F", tags: /活动|社区|食堂|午饭|买菜/, answer: "\u60F3\u4E86\u89E3\u9644\u8FD1\u7684\u6D3B\u52A8\u6216\u52A9\u9910\uFF0C\u53EF\u4EE5\u5148\u770B\u770B\u793E\u533A\u516C\u544A\u680F\uFF0C\u6216\u8005\u95EE\u4E00\u4E0B\u719F\u6089\u7684\u793E\u533A\u4FBF\u6C11\u70B9\u3002\u51FA\u95E8\u524D\u95EE\u6E05\u65F6\u95F4\u3001\u5730\u70B9\u548C\u662F\u5426\u8981\u62A5\u540D\uFF0C\u7701\u5F97\u767D\u8DD1\u3002" }
+var exampleQuestions = [
+  "\u600E\u4E48\u67E5\u7535\u8D39\uFF1F",
+  "\u600E\u4E48\u53EB\u8F66\uFF1F",
+  "\u600E\u4E48\u653E\u5927\u624B\u673A\u5B57\u4F53\uFF1F"
 ];
-function answerFor(text, mode, state2) {
-  const topic = topics.find((item) => item.tags.test(text));
-  if (topic) return topic.answer;
-  if (/提醒|叫我|记得/.test(text)) return "\u8BF7\u544A\u8BC9\u6211\u4EC0\u4E48\u65F6\u5019\u63D0\u9192\u3001\u8981\u505A\u4EC0\u4E48\u3002\u53EF\u4EE5\u8BF4\u300C\u660E\u5929\u4E0B\u5348\u4E09\u70B9\u63D0\u9192\u6211\u6D47\u82B1\u300D\u3002\u6211\u4F1A\u5148\u628A\u65F6\u95F4\u548C\u5185\u5BB9\u5217\u7ED9\u60A8\u786E\u8BA4\u3002";
-  if (mode === "family-chat" && /爸|妈|家人|关心|电话/.test(text)) return "\u53EF\u4EE5\u4ECE\u4E00\u4EF6\u5177\u4F53\u7684\u5C0F\u4E8B\u5F00\u5934\uFF0C\u6BD4\u5982\u95EE\u95EE\u4ECA\u5929\u5403\u4E86\u4EC0\u4E48\uFF0C\u6216\u6700\u8FD1\u6709\u6CA1\u6709\u60F3\u53BB\u7684\u5730\u65B9\u3002\u5982\u679C\u60F3\u7EA6\u4E2A\u56FA\u5B9A\u65F6\u95F4\u6253\u7535\u8BDD\uFF0C\u53EF\u4EE5\u8BF4\u300C\u660E\u5929\u665A\u4E0A\u516B\u70B9\u63D0\u9192\u6211\u7ED9\u7238\u5988\u6253\u7535\u8BDD\u300D\u3002";
-  if (/孤单|无聊|想家|想念/.test(text)) return "\u542C\u8D77\u6765\u60A8\u60F3\u548C\u4EBA\u8BF4\u8BF4\u8BDD\u3002\u60A8\u53EF\u4EE5\u548C\u6211\u804A\u4E00\u4EF6\u4ECA\u5929\u53D1\u751F\u7684\u5C0F\u4E8B\uFF0C\u4E5F\u53EF\u4EE5\u7ED9\u719F\u6089\u7684\u4EBA\u6253\u4E2A\u7535\u8BDD\u3002\u4ECA\u5929\u6709\u4EC0\u4E48\u4E8B\u60C5\u8BA9\u60A8\u5370\u8C61\u7279\u522B\u6DF1\uFF1F";
-  if (/难过|不开心|心情不好/.test(text)) return "\u542C\u8D77\u6765\u4ECA\u5929\u8FC7\u5F97\u6709\u4E9B\u4E0D\u5BB9\u6613\u3002\u60A8\u613F\u610F\u8BF4\u8BF4\u53D1\u751F\u4E86\u4EC0\u4E48\u5417\uFF1F\u5982\u679C\u8EAB\u8FB9\u6709\u4FE1\u5F97\u8FC7\u7684\u4EBA\uFF0C\u4E5F\u53EF\u4EE5\u8BF7\u4ED6\u966A\u60A8\u5750\u4E00\u4F1A\u513F\u3002";
-  if (mode === "ask") return "\u53EF\u4EE5\u518D\u8BF4\u8BF4\u60A8\u5361\u5728\u54EA\u4E00\u6B65\u5417\uFF1F\u6BD4\u5982\u300C\u624B\u673A\u5B57\u592A\u5C0F\u300D\u6216\u300C\u6211\u60F3\u67E5\u7535\u8D39\uFF0C\u4E0D\u77E5\u9053\u5728\u54EA\u91CC\u67E5\u300D\u3002\u76EE\u524D\u8FD9\u91CC\u80FD\u5E2E\u60A8\u5904\u7406\u51E0\u79CD\u5E38\u89C1\u7684\u751F\u6D3B\u95EE\u9898\u3002";
-  const opening2 = personas[state2.persona].prefix;
-  const interest = state2.interests.split(/[、，,\s]+/).find(Boolean);
-  if (interest) return `${opening2}\u6211\u542C\u7740\u5462\u3002\u60A8\u60F3\u7EE7\u7EED\u804A\u521A\u624D\u7684\u4E8B\uFF0C\u8FD8\u662F\u8BF4\u8BF4\u60A8\u559C\u6B22\u7684\u300C${interest.slice(0, 24)}\u300D\uFF1F`;
-  return `${opening2}\u6211\u542C\u7740\u5462\u3002\u60A8\u613F\u610F\u63A5\u7740\u8DDF\u6211\u8BF4\u8BF4\uFF0C\u4ECA\u5929\u53D1\u751F\u4E86\u4EC0\u4E48\u5417\uFF1F`;
-}
 function calendarFile(item) {
   const date = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const summary = item.title.replaceAll("\\", "\\\\").replace(/[,;]/g, "\\$&").replace(/\r?\n/g, "\\n");
@@ -243,7 +228,7 @@ var lifeGuides = [
     version: 1,
     title: "\u5FEB\u9012\u67DC\u53D6\u4EF6",
     icon: "parcel",
-    summary: "\u627E\u5230\u53D6\u4EF6\u5165\u53E3\uFF0C\u67DC\u95E8\u6CA1\u5F00\u4E5F\u77E5\u9053\u600E\u4E48\u529E",
+    summary: "\u627E\u53D6\u4EF6\u7801\uFF0C\u770B\u770B\u67DC\u95E8\u6CA1\u5F00\u600E\u4E48\u529E",
     starts: ["home", "code", "blocked"],
     success: "\u8FD9\u6B21\u53D6\u4EF6\u6307\u5F15\u8D70\u5B8C\u4E86\u3002",
     help: ["\u770B\u770B\u67DC\u4F53\u4E0A\u516C\u793A\u7684\u5BA2\u670D\u7535\u8BDD\u6216\u6C42\u52A9\u6309\u94AE\u3002", "\u5982\u679C\u65C1\u8FB9\u6709\u503C\u5B88\u9A7F\u7AD9\uFF0C\u53EF\u4EE5\u8BF7\u5DE5\u4F5C\u4EBA\u5458\u5E2E\u60A8\u770B\u5F53\u524D\u753B\u9762\u3002"],
@@ -283,9 +268,9 @@ var lifeGuides = [
   {
     id: "bill",
     version: 1,
-    title: "\u67E5\u672C\u671F\u7535\u8D39",
+    title: "\u67E5\u7535\u8D39\u8D26\u5355",
     icon: "bill",
-    summary: "\u627E\u5230\u672C\u671F\u8D26\u671F\u548C\u91D1\u989D\uFF0C\u770B\u5B8C\u5C31\u53EF\u4EE5\u505C",
+    summary: "\u627E\u5230\u8D26\u5355\u65E5\u671F\u548C\u7535\u8D39\u91D1\u989D",
     starts: ["services", "statement", "payment"],
     success: "\u8FD9\u6B21\u67E5\u8D26\u6307\u5F15\u8D70\u5B8C\u4E86\u3002",
     help: ["\u56DE\u5230\u60A8\u5E73\u65F6\u4F7F\u7528\u7684\u4F9B\u7535\u670D\u52A1\u5165\u53E3\uFF0C\u627E\u300C\u5E2E\u52A9\u300D\u6216\u300C\u5BA2\u670D\u300D\u3002", "\u4E5F\u53EF\u4EE5\u62FF\u7740\u65E7\u8D26\u5355\uFF0C\u5230\u719F\u6089\u7684\u4FBF\u6C11\u70B9\u6216\u4F9B\u7535\u8425\u4E1A\u5385\u8BE2\u95EE\u3002"],
@@ -526,10 +511,10 @@ async function askAssistant(input) {
 
 // records.js
 var scenes = {
-  parcel: { name: "\u5FEB\u9012\u548C\u53D6\u4EF6", guide: "guide/parcel", action: "\u770B\u5FEB\u9012\u67DC\u53D6\u4EF6\u6307\u5F15" },
-  bill: { name: "\u7F34\u8D39\u548C\u8D26\u5355", guide: "guide/bill", action: "\u770B\u67E5\u7535\u8D39\u6307\u5F15" },
-  device: { name: "\u8BBE\u5907\u548C\u6309\u952E", guide: "devices", action: "\u770B\u8BBE\u5907\u4F7F\u7528\u6307\u5F15" },
-  other: { name: "\u5176\u4ED6\u751F\u6D3B\u573A\u666F", guide: "guides", action: "\u67E5\u770B\u751F\u6D3B\u64CD\u4F5C\u6307\u5F15" }
+  parcel: { name: "\u5FEB\u9012\u548C\u53D6\u4EF6", guide: "guide/parcel", action: "\u770B\u770B\u600E\u4E48\u53D6\u5FEB\u9012" },
+  bill: { name: "\u7F34\u8D39\u548C\u8D26\u5355", guide: "guide/bill", action: "\u770B\u770B\u600E\u4E48\u67E5\u7535\u8D39" },
+  device: { name: "\u8BBE\u5907\u548C\u6309\u952E", guide: "devices", action: "\u770B\u770B\u5BB6\u7535\u600E\u4E48\u7528" },
+  other: { name: "\u5176\u4ED6\u751F\u6D3B\u573A\u666F", guide: "guides", action: "\u770B\u770B\u64CD\u4F5C\u6B65\u9AA4" }
 };
 function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2, icon: icon2, showDialog: showDialog2, closeDialog, notify: notify2, isGuest }) {
   let view = null;
@@ -576,10 +561,10 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
     }
   }
   const captureLink = '<a class="button quiet" href="#/records">\u6211\u7684\u8BB0\u5F55</a>';
-  const help = () => `<p class="capture-help">\u62CD\u6E05\u695A\u5361\u4F4F\u7684\u753B\u9762\uFF0C\u907F\u5F00\u53D6\u4EF6\u7801\u548C\u8D26\u53F7\u3002${isGuest() ? "\u7167\u7247\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668\u3002" : "\u7167\u7247\u53EA\u4FDD\u5B58\u5728\u60A8\u7684\u8D26\u6237\u3002"}</p>`;
+  const help = () => `<p class="capture-help">\u8BF7\u522B\u62CD\u5230\u53D6\u4EF6\u7801\u3001\u8D26\u53F7\u6216\u9A8C\u8BC1\u7801\u3002${isGuest() ? "\u70B9\u300C\u4FDD\u5B58\u7167\u7247\u300D\u540E\uFF0C\u53EF\u4EE5\u5728\u8FD9\u4E2A\u6D4F\u89C8\u5668\u91CC\u67E5\u770B\u3002" : "\u70B9\u300C\u4FDD\u5B58\u7167\u7247\u300D\u540E\uFF0C\u53EF\u4EE5\u5728\u60A8\u7684\u8D26\u6237\u91CC\u67E5\u770B\u3002"}</p>`;
   const filePicker = (id, label, native = false) => `<input type="file" id="${id}" class="capture-file" accept="image/*" ${native ? 'capture="environment"' : ""}><label for="${id}" class="button quiet capture-file-label">${icon2(native ? "camera" : "photo", 21)}${label}</label>`;
   function analysisPanel(result, analyzing) {
-    if (analyzing) return '<p class="analysis-panel" role="status">\u79BE\u4F34\u6B63\u5728\u770B\u7167\u7247\u2026</p>';
+    if (analyzing) return '<p class="analysis-panel" role="status">\u52A9\u624B\u6B63\u5728\u770B\u7167\u7247\u2026</p>';
     if (!result) return "";
     const spoken = [result.observation, ...result.steps, result.verify].filter(Boolean).join("\u3002");
     return `<section class="analysis-panel" aria-labelledby="capture-analysis">
@@ -603,17 +588,17 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
       const saving = mode === "saving";
       const analyzing = mode === "analyzing";
       const disabled = mode !== "review" ? "disabled" : "";
-      body = `<img class="capture-frame" src="${photo}" alt="\u60A8\u8981\u4FDD\u5B58\u7684\u73B0\u573A\u7167\u7247">
+      body = `<img class="capture-frame" src="${photo}" alt="\u60A8\u9009\u7684\u7167\u7247">
         <form class="capture-form" data-form="scene-record">
-          <label for="record-scene">\u8FD9\u662F\u4EC0\u4E48\u573A\u666F\uFF1F</label>
+          <label for="record-scene">\u7167\u7247\u662F\u5173\u4E8E\u4EC0\u4E48\u7684\uFF1F</label>
           <select id="record-scene" name="scene" ${disabled}>
             ${Object.entries(scenes).map(([key, item]) => `<option value="${key}" ${key === scene ? "selected" : ""}>${item.name}</option>`).join("")}
           </select>
           <label for="record-note">\u60A8\u60F3\u505A\u4EC0\u4E48\uFF1F\uFF08\u9009\u586B\uFF09</label>
           <textarea id="record-note" name="note" maxlength="140" rows="2" placeholder="\u4F8B\u5982\uFF1A\u60F3\u628A\u7A7A\u8C03\u8C03\u5230\u5236\u51B7" ${disabled}>${escapeHtml2(note)}</textarea>
-          <p class="form-help">\u9009\u62E9\u5206\u6790\u65F6\uFF0C\u7167\u7247\u548C\u8FD9\u53E5\u8BDD\u4F1A\u53D1\u9001\u7ED9 DeepSeek\u3002</p>
+          <p class="form-help">\u70B9\u300C\u8BF7\u52A9\u624B\u770B\u770B\u300D\uFF0C\u7167\u7247\u548C\u60A8\u586B\u7684\u8BDD\u4F1A\u53D1\u7ED9 DeepSeek\u3002</p>
           <div class="capture-actions">
-          <button id="capture-analyze" class="button" type="submit" value="analyze" ${disabled}>${analyzing ? "\u6B63\u5728\u5206\u6790\u2026" : "\u5206\u6790\u8FD9\u5F20\u7167\u7247"}</button>
+          <button id="capture-analyze" class="button" type="submit" value="analyze" ${disabled}>${analyzing ? "\u6B63\u5728\u770B\u7167\u7247\u2026" : "\u8BF7\u52A9\u624B\u770B\u770B"}</button>
           <button id="capture-save" class="button quiet" type="submit" value="save" ${disabled}>${saving ? "\u6B63\u5728\u4FDD\u5B58\u2026" : "\u4FDD\u5B58\u7167\u7247"}</button>
           <button class="button quiet" type="button" data-action="capture-reset" ${disabled}>\u91CD\u62CD\u6216\u6362\u4E00\u5F20</button></div>
         </form>
@@ -632,15 +617,15 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
         </div>
       </section>`;
     }
-    return `${pageHeader2("\u62CD\u7167\u5206\u6790", back)}<main class="surface capture-screen">
-      <div class="capture-intro"><div><h2>${reviewing ? "\u786E\u8BA4\u8FD9\u5F20\u7167\u7247" : "\u62CD\u4E0B\u773C\u524D\u7684\u753B\u9762"}</h2>${help()}</div>${captureLink}</div>
+    return `${pageHeader2("\u62CD\u7167\u95EE\u4E00\u95EE", back)}<main class="surface capture-screen">
+      <div class="capture-intro"><div><h2>${reviewing ? "\u5148\u770B\u4E00\u773C\u7167\u7247" : "\u62CD\u6E05\u695A\u6309\u952E\u6216\u5C4F\u5E55"}</h2>${help()}</div>${captureLink}</div>
       ${error && !reviewing ? `<p class="capture-error" role="alert">${escapeHtml2(error)}</p>` : ""}
       ${body}
     </main>`;
   }
   function recordsScreen() {
     return `${pageHeader2("\u6211\u7684\u8BB0\u5F55", "mine")}<main class="surface capture-screen">
-      <div class="capture-intro"><div><h2>\u73B0\u573A\u7167\u7247</h2><p class="capture-help">${isGuest() ? "\u8FD9\u4E9B\u7167\u7247\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668\u3002" : "\u53EA\u6709\u60A8\u767B\u5F55\u540E\u53EF\u4EE5\u67E5\u770B\u3002"}</p></div><a class="button" href="#/capture">${icon2("camera", 22)}\u62CD\u7167\u5206\u6790</a></div>
+      <div class="capture-intro"><div><h2>\u4FDD\u5B58\u7684\u7167\u7247</h2><p class="capture-help">${isGuest() ? "\u8FD9\u4E9B\u7167\u7247\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668\u3002" : "\u53EA\u6709\u60A8\u767B\u5F55\u540E\u53EF\u4EE5\u67E5\u770B\u3002"}</p></div><a class="button" href="#/capture">${icon2("camera", 22)}\u62CD\u7167\u95EE\u4E00\u95EE</a></div>
       ${view.loading ? '<p role="status" class="empty-card">\u6B63\u5728\u8BFB\u53D6\u8BB0\u5F55\u2026</p>' : view.error ? retry() : !view.records.length ? '<p class="empty-card">\u8FD8\u6CA1\u6709\u7167\u7247\u3002\u9047\u5230\u4E0D\u4F1A\u64CD\u4F5C\u7684\u753B\u9762\uFF0C\u53EF\u4EE5\u62CD\u4E00\u5F20\u7559\u7740\u3002</p>' : `<ul class="record-list">${view.records.map((record) => `<li><a href="#/record/${encodeURIComponent(record.id)}">
           <img src="${escapeHtml2(photoUrl(record.photo))}" alt="" loading="lazy"><span><strong>${scenes[record.scene].name}</strong>
           <span>${escapeHtml2(formatWhen(record.createdAt))}</span>${record.note ? `<span>${escapeHtml2(record.note)}</span>` : ""}</span></a></li>`).join("")}</ul>`}
@@ -745,7 +730,7 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
   async function analyze(data, chosen) {
     const current = view;
     if (current?.mode !== "review") return;
-    Object.assign(current, { mode: "analyzing", scene: data.get("scene"), note: (chosen ?? data.get("note")).trim(), error: "" });
+    Object.assign(current, { mode: "analyzing", scene: data.get("scene"), note: (chosen ?? data.get("note")).trim(), error: "", analysis: null });
     redraw(current);
     try {
       const { analysis } = await askAssistant({ text: current.note, photo: current.photo });
@@ -1243,9 +1228,9 @@ async function signInWithDevice(api2, mode, fields) {
 
 // shortcuts.js
 var shortcutOptions = {
-  guides: { title: "\u751F\u6D3B\u64CD\u4F5C\u6307\u5F15", link: "guides", glyph: "bill" },
-  camera: { title: "\u62CD\u7167\u5206\u6790", link: "capture/device", glyph: "camera" },
-  reminders: { title: "\u8BBE\u7F6E\u63D0\u9192", link: "reminders", glyph: "bell" },
+  guides: { title: "\u8DDF\u7740\u505A", link: "guides", glyph: "bill" },
+  camera: { title: "\u62CD\u7167\u95EE\u4E00\u95EE", link: "capture/device", glyph: "camera" },
+  reminders: { title: "\u8BBE\u4E2A\u63D0\u9192", link: "reminders", glyph: "bell" },
   records: { title: "\u6211\u7684\u8BB0\u5F55", link: "records", glyph: "photo" },
   chat: { title: "\u804A\u804A\u5929", link: "chat", glyph: "chat" }
 };
@@ -1393,7 +1378,7 @@ function homeHeader(owner) {
     </div></header>`;
 }
 function pageHeader(title, owner, extra = "") {
-  const backLabel = { family: "\u5BB6\u5C5E\u7AEF", devices: "\u5BB6\u91CC\u8BBE\u5907", "family-devices": "\u8BBE\u5907\u5361\u5217\u8868", guides: "\u751F\u6D3B\u64CD\u4F5C\u6307\u5F15", connections: "\u5BB6\u5EAD\u8FDE\u63A5", ask: "\u52A9\u624B", chat: "\u804A\u5929", mine: "\u6211\u7684", records: "\u6211\u7684\u8BB0\u5F55", "guide/parcel": "\u5FEB\u9012\u67DC\u53D6\u4EF6\u6307\u5F15", "guide/bill": "\u67E5\u7535\u8D39\u6307\u5F15" }[owner] ?? "\u957F\u8F88\u7AEF";
+  const backLabel = { family: "\u5BB6\u5C5E\u7AEF", devices: "\u5BB6\u7535\u600E\u4E48\u7528", "family-devices": "\u8BBE\u5907\u5361\u5217\u8868", guides: "\u300C\u8DDF\u7740\u505A\u300D", connections: "\u5BB6\u5EAD\u8FDE\u63A5", ask: "\u95EE\u95EE\u52A9\u624B", chat: "\u804A\u5929", mine: "\u6211\u7684", records: "\u6211\u7684\u8BB0\u5F55", "guide/parcel": "\u5FEB\u9012\u67DC\u53D6\u4EF6", "guide/bill": "\u67E5\u7535\u8D39\u8D26\u5355" }[owner] ?? "\u9996\u9875";
   return `<header class="topbar subbar"><a class="icon-button" href="#/${owner}" aria-label="\u8FD4\u56DE${backLabel}">${icon("back")}</a><h1 id="screen-title" tabindex="-1">${title}</h1>${extra}<span class="subbar-space" aria-hidden="true"></span></header>`;
 }
 function tile({ link, action, title, subtitle, glyph, tone = "sage", prominent = false, id }) {
@@ -1403,10 +1388,10 @@ function tile({ link, action, title, subtitle, glyph, tone = "sage", prominent =
     <span class="tile-icon ${tone}">${icon(glyph, 30)}</span><span class="tile-text"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(subtitle)}</span></span>${icon("right", 23)}</${tag}>`;
 }
 var quickCards = [
-  { link: "ask", title: "\u95EE\u95EE\u52A9\u624B", subtitle: "\u6253\u5B57\u6216\u7528\u8BED\u97F3\u95EE", glyph: "chat", color: "blue" },
-  { link: "guide/parcel", title: "\u5FEB\u9012\u67DC\u53D6\u4EF6", subtitle: "\u627E\u5230\u53D6\u4EF6\u5165\u53E3", glyph: "parcel", color: "peach" },
-  { link: "guide/bill", title: "\u67E5\u672C\u671F\u7535\u8D39", subtitle: "\u770B\u8D26\u5355\u548C\u7F34\u8D39\u8BB0\u5F55", glyph: "bill", color: "lilac" },
-  { link: "devices", title: "\u5BB6\u91CC\u8BBE\u5907", subtitle: "\u770B\u56FE\u627E\u6309\u952E", glyph: "remote", color: "mint" }
+  { link: "ask", title: "\u95EE\u95EE\u52A9\u624B", subtitle: "\u53EF\u4EE5\u8BF4\u8BDD\uFF0C\u4E5F\u53EF\u4EE5\u6253\u5B57", glyph: "chat", color: "blue" },
+  { link: "guide/parcel", title: "\u5FEB\u9012\u67DC\u53D6\u4EF6", subtitle: "\u627E\u53D6\u4EF6\u7801\uFF0C\u5B66\u7740\u5F00\u67DC\u95E8", glyph: "parcel", color: "peach" },
+  { link: "guide/bill", title: "\u67E5\u7535\u8D39\u8D26\u5355", subtitle: "\u770B\u770B\u8FD9\u671F\u8981\u4EA4\u591A\u5C11\u94B1", glyph: "bill", color: "lilac" },
+  { link: "devices", title: "\u5BB6\u7535\u600E\u4E48\u7528", subtitle: "\u770B\u56FE\u627E\u6309\u952E", glyph: "remote", color: "mint" }
 ];
 function featureCard({ link, title, subtitle, glyph, color = "blue", external = false }) {
   return `<a class="feature-card tone-${color}" href="${escapeHtml(external ? link : "#/" + link)}" ${external ? 'target="_blank" rel="noopener noreferrer"' : ""}>
@@ -1431,8 +1416,8 @@ function elderHome() {
   return `${homeHeader("elder")}<main class="surface home-screen">
     <div class="home-heading"><h1 id="screen-title" tabindex="-1">\u751F\u6D3B\u5E2E\u624B</h1><p class="date">${longDate.format(/* @__PURE__ */ new Date())}</p></div>
     <section class="feature-banner home-capture" aria-labelledby="capture-home-title">
-      <div class="banner-copy"><h2 id="capture-home-title">\u64CD\u4F5C\u5361\u4F4F\u4E86\uFF1F</h2><p>\u62CD\u5F20\u7167\u7247\uFF0C\u8BF7\u52A9\u624B\u770B\u770B\u3002</p>
-      <a class="button home-camera-button" href="#/capture/other/home">${icon("camera", 23)}\u62CD\u7167\u5206\u6790</a></div>
+      <div class="banner-copy"><h2 id="capture-home-title">\u4E0D\u77E5\u9053\u6309\u54EA\u4E2A\u952E\uFF1F</h2><p>\u62CD\u4E0B\u6309\u952E\u6216\u5C4F\u5E55\uFF0C\u770B\u770B\u4E0B\u4E00\u6B65\u600E\u4E48\u505A\u3002</p>
+      <a class="button home-camera-button" href="#/capture/other/home">${icon("camera", 23)}\u62CD\u7167\u95EE\u4E00\u95EE</a></div>
       <img src="./assets/guide-kit.webp" width="520" height="434" alt="" fetchpriority="high">
     </section>
     <section class="tool-section" aria-labelledby="home-tools-title">
@@ -1440,7 +1425,7 @@ function elderHome() {
       <div class="feature-grid">${quickCards.map(featureCard).join("")}${addedFeatureCards()}</div>
     </section>
     <div class="app-list home-shortcuts">
-      ${tile({ link: "reminders", title: "\u8BBE\u7F6E\u63D0\u9192", subtitle: next ? `${formatWhen(next.at)}\u3000${next.title}` : "\u8BB0\u4E0B\u63A5\u4E0B\u6765\u8981\u505A\u7684\u4E8B", glyph: "bell" })}
+      ${tile({ link: "reminders", title: "\u8BBE\u4E2A\u63D0\u9192", subtitle: next ? `${formatWhen(next.at)}\u3000${next.title}` : "\u8BB0\u4E0B\u4E70\u83DC\u3001\u51FA\u95E8\u7684\u65F6\u95F4", glyph: "bell" })}
     </div>
   </main>`;
 }
@@ -1448,7 +1433,7 @@ function bottomNav() {
   const tabs = [
     { link: "elder", label: "\u9996\u9875", glyph: "home", pages: ["elder"] },
     { link: "ask", label: "\u52A9\u624B", glyph: "chat", pages: ["ask", "chat", "assistant-settings", "capture"] },
-    { link: "guides", label: "\u6307\u5F15", glyph: "bill", pages: ["guides", "guide", "devices", "device"] },
+    { link: "guides", label: "\u8DDF\u7740\u505A", glyph: "bill", pages: ["guides", "guide", "devices", "device"] },
     { link: "mine", label: "\u6211\u7684", glyph: "people" }
   ];
   const selected = tabs.find((tab) => tab.pages?.includes(route))?.link ?? "mine";
@@ -1463,9 +1448,9 @@ function mineScreen() {
       ${account.guest ? loginAction("\u767B\u5F55") : '<button class="button quiet" data-action="account-signout" type="button">\u9000\u51FA\u767B\u5F55</button>'}
     </div>
     <div class="app-list">
-      ${tile({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u67E5\u770B\u4FDD\u5B58\u7684\u73B0\u573A\u7167\u7247", glyph: "photo" })}
-      ${tile({ link: "reminders", title: "\u6211\u7684\u63D0\u9192", subtitle: "\u67E5\u770B\u548C\u7BA1\u7406\u63D0\u9192", glyph: "bell" })}
-      ${tile({ link: "assistant-settings/mine", title: "\u52A9\u624B\u8BBE\u7F6E", subtitle: "\u9009\u62E9\u56DE\u590D\u98CE\u683C\u548C\u8BED\u901F", glyph: "tune" })}
+      ${tile({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u770B\u770B\u5B58\u4E0B\u7684\u7167\u7247", glyph: "photo" })}
+      ${tile({ link: "reminders", title: "\u6211\u7684\u63D0\u9192", subtitle: "\u770B\u65F6\u95F4\uFF0C\u4E5F\u53EF\u4EE5\u6539\u65F6\u95F4", glyph: "bell" })}
+      ${tile({ link: "assistant-settings/mine", title: "\u52A9\u624B\u8BBE\u7F6E", subtitle: "\u53EF\u4EE5\u8BA9\u52A9\u624B\u8BFB\u6162\u4E00\u70B9", glyph: "tune" })}
       ${tile({ link: "family", title: "\u5BB6\u5C5E\u7AEF", subtitle: "\u8054\u7CFB\u5BB6\u4EBA\u3001\u5236\u4F5C\u8BBE\u5907\u5361", glyph: "heart" })}
     </div>
   </main>`;
@@ -1581,33 +1566,35 @@ async function removeShortcut(button) {
 }
 var chatConfig = {
   chat: { title: "\u804A\u804A\u5929", examples: ["\u4ECA\u5929\u60F3\u804A\u804A\u5929", "\u9644\u8FD1\u6709\u4EC0\u4E48\u793E\u533A\u6D3B\u52A8\uFF1F", "\u660E\u5929\u4E0B\u5348\u4E09\u70B9\u63D0\u9192\u6211\u6D47\u82B1"], greeting: "\u60A8\u597D\uFF0C\u6211\u662F{name}\u3002\u60A8\u53EF\u4EE5\u548C\u6211\u8BF4\u8BF4\u4ECA\u5929\u8FC7\u5F97\u600E\u4E48\u6837\uFF0C\u4E5F\u53EF\u4EE5\u8BA9\u6211\u5E2E\u60A8\u8BB0\u4E00\u4EF6\u8981\u505A\u7684\u4E8B\u3002" },
-  ask: { title: "\u95EE\u95EE\u52A9\u624B", examples: topics.slice(0, 3).map((topic) => topic.title), greeting: "\u60A8\u73B0\u5728\u60F3\u505A\u4EC0\u4E48\uFF1F\u53EF\u4EE5\u4ECE\u300C\u600E\u4E48\u67E5\u7535\u8D39\u300D\u8FD9\u6837\u7684\u95EE\u9898\u95EE\u8D77\u3002" },
+  ask: { title: "\u95EE\u95EE\u52A9\u624B", examples: exampleQuestions, greeting: "\u9047\u5230\u4E0D\u4F1A\u7528\u7684\u624B\u673A\u529F\u80FD\u6216\u5BB6\u7535\uFF0C\u53EF\u4EE5\u5728\u8FD9\u513F\u95EE\u3002\u6BD4\u5982\u300C\u600E\u4E48\u770B\u7535\u8D39\u8D26\u5355\uFF1F\u300D" },
   "family-chat": { title: "\u8DDF\u52A9\u624B\u804A\u804A", examples: ["\u600E\u4E48\u548C\u7238\u5988\u6253\u5F00\u8BDD\u9898\uFF1F", "\u660E\u5929\u665A\u4E0A\u516B\u70B9\u63D0\u9192\u6211\u7ED9\u7238\u5988\u6253\u7535\u8BDD"], greeting: "\u60A8\u597D\uFF0C\u6211\u662F{name}\u3002\u60A8\u53EF\u4EE5\u95EE\u6211\u600E\u4E48\u548C\u957F\u8F88\u804A\u804A\uFF0C\u4E5F\u53EF\u4EE5\u8BBE\u7F6E\u4E00\u4E2A\u8054\u7CFB\u63D0\u9192\u3002" }
 };
 function chatScreen(mode) {
   const config = chatConfig[mode];
   const waiting = pendingReplies.get(mode) === account;
   const failure = failedReplies.get(mode);
-  const greeting = config.greeting.replace("{name}", state.persona);
+  const interest = mode === "chat" ? state.interests.split(/[、，,\s]+/).find(Boolean) : "";
+  const greeting = config.greeting.replace("{name}", state.persona) + (interest ? `\u4E5F\u53EF\u4EE5\u804A\u804A\u60A8\u559C\u6B22\u7684\u300C${interest.slice(0, 24)}\u300D\u3002` : "");
   const messages = [{ role: "assistant", text: greeting }, ...state.messages[mode]];
   const toggle = `<button class="listen" data-action="listen" type="button" aria-pressed="${state.listen}">${icon("sound", 20)}\u542C\u56DE\u590D<span class="switch" aria-hidden="true"></span></button>`;
   const familyMode = mode === "family-chat";
   return `${pageHeader(config.title, familyMode ? "family" : "elder", `<div class="toolbar chat-controls">${toggle}${familyMode ? "" : settings(mode)}</div>`)}<main class="surface conversation" data-mode="${mode}">
-    ${familyMode ? "" : `<nav class="assistant-tabs" aria-label="\u52A9\u624B\u6A21\u5F0F"><a href="#/ask" ${mode === "ask" ? 'aria-current="page"' : ""}>\u751F\u6D3B\u95EE\u7B54</a><a href="#/chat" ${mode === "chat" ? 'aria-current="page"' : ""}>\u804A\u804A\u5929</a></nav>
+    ${familyMode ? "" : `<nav class="assistant-tabs" aria-label="\u52A9\u624B\u529F\u80FD"><a href="#/ask" ${mode === "ask" ? 'aria-current="page"' : ""}>\u95EE\u600E\u4E48\u7528</a><a href="#/chat" ${mode === "chat" ? 'aria-current="page"' : ""}>\u804A\u804A\u5929</a></nav>
       <div class="assistant-tools" aria-label="\u52A9\u624B\u5DE5\u5177">
-        ${featureCard({ link: "capture", title: "\u62CD\u7167\u5206\u6790", subtitle: "\u770B\u770B\u600E\u4E48\u64CD\u4F5C", glyph: "camera", color: "blue" })}
-        ${featureCard({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u770B\u73B0\u573A\u7167\u7247", glyph: "photo", color: "lilac" })}
+        ${featureCard({ link: "capture", title: "\u62CD\u7167\u95EE\u4E00\u95EE", subtitle: "\u62CD\u4E0B\u6309\u952E\u6216\u5C4F\u5E55", glyph: "camera", color: "blue" })}
+        ${featureCard({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u770B\u5B58\u4E0B\u7684\u7167\u7247", glyph: "photo", color: "lilac" })}
       </div>`}
     <div class="message-list" role="log" aria-label="\u804A\u5929\u8BB0\u5F55">${messages.map(renderMessage).join("")}
       ${waiting ? '<p class="assistant-wait" role="status">\u79BE\u4F34\u6B63\u5728\u56DE\u7B54\u2026</p>' : ""}
       ${failure?.account === account ? `<div class="assistant-retry" role="status"><p>${escapeHtml(failure.error)}</p>
-        <button type="button" class="button quiet" data-action="assistant-retry">\u91CD\u8BD5\u56DE\u7B54</button></div>` : ""}
+        <button type="button" class="button quiet" data-action="assistant-retry">\u518D\u95EE\u4E00\u6B21</button>
+        ${mode === "ask" ? '<a class="section-link" href="#/guides">\u5148\u770B\u64CD\u4F5C\u6B65\u9AA4</a>' : ""}</div>` : ""}
     </div>
     <div class="composer-area">
       <div class="examples" aria-label="\u5E38\u7528\u8BF4\u6CD5">${config.examples.map((example) => `<button class="example" type="button" data-action="example" data-text="${escapeHtml(example)}" ${waiting ? "disabled" : ""}>${escapeHtml(example)}</button>`).join("")}</div>
       <form class="composer" data-form="message"><button class="icon-button mic" type="button" data-action="voice" aria-label="\u7528\u8BED\u97F3\u8F93\u5165" ${waiting ? "disabled" : ""}>${icon("mic", 25)}</button>
-      <input id="message-input" name="message" aria-label="\u60F3\u8BF4\u7684\u8BDD" placeholder="\u8BF4\u8BF4\u60A8\u60F3\u95EE\u7684\u4E8B" maxlength="300" autocomplete="off" required ${waiting ? "disabled" : ""}><button class="button" type="submit" ${waiting ? "disabled" : ""}>\u53D1\u9001</button></form>
-      <p class="chat-note">\u5728\u7EBF\u95EE\u7B54\u7531 DeepSeek \u63D0\u4F9B\uFF0C\u8BF7\u907F\u5F00\u8D26\u53F7\u548C\u9A8C\u8BC1\u7801\u3002</p>
+      <input id="message-input" name="message" aria-label="\u60F3\u8BF4\u7684\u8BDD" placeholder="${mode === "ask" ? "\u5728\u8FD9\u91CC\u5199\u4E0B\u60A8\u7684\u95EE\u9898" : "\u5728\u8FD9\u91CC\u5199\u4E0B\u60A8\u60F3\u8BF4\u7684\u8BDD"}" maxlength="300" autocomplete="off" required ${waiting ? "disabled" : ""}><button class="button" type="submit" ${waiting ? "disabled" : ""}>\u53D1\u9001</button></form>
+      <p class="chat-note">\u8BF7\u522B\u53D1\u9001\u8D26\u53F7\u3001\u5BC6\u7801\u6216\u9A8C\u8BC1\u7801\u3002\u5728\u7EBF\u56DE\u590D\u7531 DeepSeek \u63D0\u4F9B\u3002</p>
     </div></main>`;
 }
 function renderMessage(message) {
@@ -1635,7 +1622,7 @@ function remindersScreen(owner) {
   </main>`;
 }
 function devicesScreen() {
-  return `${pageHeader("\u5BB6\u91CC\u8BBE\u5907\u600E\u4E48\u7528", "elder")}<main class="surface devices-screen">
+  return `${pageHeader("\u5BB6\u7535\u600E\u4E48\u7528", "elder")}<main class="surface devices-screen">
     ${state.deviceGuides.length ? `<section aria-labelledby="my-devices"><h2 id="my-devices">\u6211\u5BB6\u7684\u8BBE\u5907</h2><div class="stack">${state.deviceGuides.map((guide) => tile({ link: `device/${guide.id}`, title: guide.name, subtitle: "\u770B\u6211\u5BB6\u8BBE\u5907\u7684\u7167\u7247", glyph: "photo" })).join("")}</div></section>` : ""}
     <section aria-labelledby="practice-devices"><h2 id="practice-devices">\u5148\u5728\u624B\u673A\u4E0A\u7EC3\u4E00\u7EC3</h2><div class="stack">${deviceLessons.map((lesson) => tile({ link: `device/${lesson.id}`, title: lesson.name, subtitle: lesson.summary, glyph: lesson.icon, tone: lesson.icon === "washer" ? "apricot" : "sage" })).join("")}</div></section>
     <p class="device-help">\u7EC3\u5B8C\u53EF\u4EE5\u5BF9\u7167\u5B9E\u7269\u627E\u6309\u952E\u3002\u6309\u952E\u4E0D\u4E00\u6837\u65F6\uFF0C\u53EF\u4EE5\u8BF7\u5BB6\u4EBA\u7ED9\u8FD9\u53F0\u8BBE\u5907\u505A\u4E00\u5F20\u7167\u7247\u6307\u5F15\u3002</p>
@@ -1787,15 +1774,15 @@ function saveDeviceGuide(form) {
   notify("\u8BBE\u5907\u5361\u5DF2\u4FDD\u5B58\u3002\u957F\u8F88\u7AEF\u53EF\u4EE5\u67E5\u770B\u4E86\u3002");
 }
 function guidesScreen() {
-  return `${pageHeader("\u751F\u6D3B\u64CD\u4F5C\u6307\u5F15", "elder")}<main class="surface guides-screen">
-    <div class="section-heading"><h2>\u9009\u4E00\u4EF6\u4E8B\uFF0C\u8DDF\u7740\u505A</h2></div>
+  return `${pageHeader("\u8DDF\u7740\u505A", "elder")}<main class="surface guides-screen">
+    <div class="section-heading"><h2>\u60A8\u60F3\u5B66\u54EA\u4E00\u4EF6\u4E8B\uFF1F</h2></div>
     <div class="feature-grid">${lifeGuides.map((guide) => {
     const run = readGuideRun(guide, state.guideRuns[guide.id]);
     const inProgress = guide.steps[run.screen]?.title ?? (run.screen === "help" ? "\u627E\u4EBA\u5E2E\u5FD9" : "");
     return featureCard({ link: `guide/${guide.id}`, title: guide.title, subtitle: inProgress ? `\u7EE7\u7EED\uFF1A${inProgress}` : guide.summary, glyph: guide.icon, color: guide.id === "parcel" ? "peach" : "lilac" });
   }).join("")}
       ${featureCard(quickCards[3])}
-      ${featureCard({ link: "capture", title: "\u62CD\u7167\u5206\u6790", subtitle: "\u62CD\u4E0B\u5361\u4F4F\u7684\u753B\u9762", glyph: "camera", color: "blue" })}
+      ${featureCard({ link: "capture", title: "\u62CD\u7167\u95EE\u4E00\u95EE", subtitle: "\u62CD\u4E0B\u6309\u952E\u6216\u5C4F\u5E55", glyph: "camera", color: "blue" })}
     </div>
     <p class="device-help">\u8FD9\u91CC\u662F\u64CD\u4F5C\u6F14\u793A\u3002\u5B9E\u9645\u753B\u9762\u4EE5\u73B0\u573A\u8BBE\u5907\u6216\u5B98\u65B9\u670D\u52A1\u4E3A\u51C6\u3002</p>
   </main>`;
@@ -1821,7 +1808,7 @@ function guideScreen() {
       const step2 = guide.steps[key];
       return `<button class="guide-choice" type="button" data-action="guide-start" data-step="${key}"><span><strong>${escapeHtml(step2.title)}</strong><span>${escapeHtml(step2.preview.labels.join(" \xB7 "))}</span></span>${icon("right", 21)}</button>`;
     }).join("")}<button class="button quiet wide" type="button" data-action="guide-help">\u90FD\u4E0D\u4E00\u6837\uFF0C\u627E\u4EBA\u5E2E\u5FD9</button></div>
-      <a class="button quiet guide-capture" href="#/capture/${guide.id}">${icon("camera", 22)}\u62CD\u4E0B\u5F53\u524D\u753B\u9762</a>
+      <a class="button quiet guide-capture" href="#/capture/${guide.id}">${icon("camera", 22)}\u62CD\u7167\u95EE\u4E00\u95EE</a>
       <p class="device-help guide-caption">\u793A\u4F8B\u91CC\u6CA1\u6709\u771F\u5B9E\u53D6\u4EF6\u7801\u3001\u6237\u53F7\u6216\u4EA4\u6613\u3002</p>
     </main>`;
   }
@@ -1829,7 +1816,7 @@ function guideScreen() {
     const complete = run.screen === "done";
     return `${header}<main class="surface guide-screen">
       <h2 id="guide-heading" tabindex="-1">${complete ? guide.success : "\u53EF\u4EE5\u627E\u4EBA\u5E2E\u60A8\u770B\u770B"}</h2>
-      ${complete ? '<a class="button wide" href="#/guides">\u8FD4\u56DE\u751F\u6D3B\u64CD\u4F5C\u6307\u5F15</a>' : `${run.failed >= 2 ? '<p class="guide-notice">\u67DC\u95E8\u8BD5\u4E86\u4E24\u6B21\u4ECD\u672A\u6253\u5F00\uFF0C\u53EF\u4EE5\u8BF7\u5DE5\u4F5C\u4EBA\u5458\u67E5\u770B\u3002</p>' : ""}
+      ${complete ? '<a class="button wide" href="#/guides">\u8FD4\u56DE\u300C\u8DDF\u7740\u505A\u300D</a>' : `${run.failed >= 2 ? '<p class="guide-notice">\u67DC\u95E8\u8BD5\u4E86\u4E24\u6B21\u4ECD\u672A\u6253\u5F00\uFF0C\u53EF\u4EE5\u8BF7\u5DE5\u4F5C\u4EBA\u5458\u67E5\u770B\u3002</p>' : ""}
           <ol class="guide-help-list">${guide.help.map((text) => `<li>${escapeHtml(text)}</li>`).join("")}</ol>
           <button class="button quiet" type="button" data-action="read" data-text="${escapeHtml(guide.help.join(""))}">${icon("sound", 23)}\u542C\u6C42\u52A9\u529E\u6CD5</button>`}
       ${footer}
@@ -2022,7 +2009,7 @@ function cloudEntry(message = "", values = {}) {
   accountBar.hidden = true;
   const creating = formMode === "create";
   app.innerHTML = `<header class="topbar"><span class="brand">${icon("home", 40)}\u79BE\u4F34</span></header>
-    <main class="surface cloud-entry entry-choice"><h1 id="screen-title" tabindex="-1">${formMode ? creating ? "\u521B\u5EFA\u79BE\u4F34\u8D26\u6237" : "\u7528\u90AE\u7BB1\u767B\u5F55" : "\u751F\u6D3B\u64CD\u4F5C\u6307\u5F15"}</h1>
+    <main class="surface cloud-entry entry-choice"><h1 id="screen-title" tabindex="-1">${formMode ? creating ? "\u521B\u5EFA\u79BE\u4F34\u8D26\u6237" : "\u7528\u90AE\u7BB1\u767B\u5F55" : "\u60A8\u7684\u751F\u6D3B\u5E2E\u624B"}</h1>
     ${formMode ? `<p>\u7528\u624B\u673A\u6216\u7535\u8111\u7684\u6307\u7EB9\u3001\u9762\u5BB9\u6216\u9501\u5C4F\u5BC6\u7801\u786E\u8BA4\u8EAB\u4EFD\u3002</p>
       <form class="sign-in-form" data-form="email-login">
         ${creating ? `<label for="login-name">\u600E\u4E48\u79F0\u547C\u60A8\uFF1F</label><input id="login-name" name="name" autocomplete="nickname" maxlength="40" value="${escapeHtml(values.name ?? "")}" required>` : ""}
@@ -2030,12 +2017,12 @@ function cloudEntry(message = "", values = {}) {
         <p class="form-error" role="alert">${escapeHtml(message)}</p>
         <button class="button" type="submit">${creating ? "\u786E\u8BA4\u8BBE\u5907\u5E76\u521B\u5EFA" : "\u786E\u8BA4\u8BBE\u5907\u5E76\u767B\u5F55"}</button>
       </form>
-      <button class="text-button" data-action="${creating ? "login-existing" : "login-create"}" type="button">${creating ? "\u5DF2\u6709\u79BE\u4F34\u8D26\u6237\uFF1F\u767B\u5F55" : "\u7B2C\u4E00\u6B21\u4F7F\u7528\uFF1F\u521B\u5EFA\u8D26\u6237"}</button>` : `<p>\u53D6\u5FEB\u9012\u3001\u67E5\u7535\u8D39\u3001\u62CD\u4E0B\u4E0D\u4F1A\u64CD\u4F5C\u7684\u753B\u9762\u3002</p>
+      <button class="text-button" data-action="${creating ? "login-existing" : "login-create"}" type="button">${creating ? "\u5DF2\u6709\u79BE\u4F34\u8D26\u6237\uFF1F\u767B\u5F55" : "\u7B2C\u4E00\u6B21\u4F7F\u7528\uFF1F\u521B\u5EFA\u8D26\u6237"}</button>` : `<p>\u5B66\u53D6\u5FEB\u9012\u3001\u67E5\u7535\u8D39\u3002\u9047\u5230\u4E0D\u4F1A\u6309\u7684\u952E\uFF0C\u62CD\u5F20\u7167\u7247\u95EE\u4E00\u95EE\u3002</p>
       ${message ? `<p class="form-error" role="alert">${escapeHtml(message)}</p>` : ""}
-      <button class="button" type="button" data-action="continue-guest">\u8DF3\u8FC7\u767B\u5F55</button>
+      <button class="button" type="button" data-action="continue-guest">\u4E0D\u767B\u5F55\uFF0C\u76F4\u63A5\u7528</button>
       <button class="button quiet" type="button" data-action="login-create">\u7528\u90AE\u7BB1\u7EE7\u7EED</button>
       <p class="form-help">\u8DF3\u8FC7\u540E\uFF0C\u63D0\u9192\u548C\u7167\u7247\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668\u3002</p>`}
-    ${formMode ? '<button class="text-button" data-action="continue-guest" type="button">\u8DF3\u8FC7\u767B\u5F55</button>' : ""}
+    ${formMode ? '<button class="text-button" data-action="continue-guest" type="button">\u4E0D\u767B\u5F55\uFF0C\u76F4\u63A5\u7528</button>' : ""}
     ${account ? '<button class="text-button" type="button" data-action="close-login">\u8FD4\u56DE</button>' : ""}
     <details class="old-account"><summary>\u627E\u56DE\u65E7\u7248\u8BB0\u5F55</summary><a href="${legacySignIn}" target="_top">\u6253\u5F00\u65E7\u7248\u8D26\u6237</a></details>
     </main>`;
@@ -2251,19 +2238,18 @@ async function sendMessage(text, retry = false) {
   if (!messages || pendingReplies.get(mode) === active) return;
   if (retry) {
     const failed = failedReplies.get(mode);
-    if (failed?.account !== active || messages.at(-1)?.id !== failed.replyId || messages.at(-2)?.id !== failed.questionId) return;
-    messages.pop();
+    if (failed?.account !== active || messages.at(-1)?.id !== failed.questionId) return;
   } else {
     messages.push({ id: crypto.randomUUID(), role: "user", text: input });
   }
   failedReplies.delete(mode);
   const questionId = messages.at(-1).id;
-  const history2 = messages.slice(-7, -1).map(({ role, text: text2 }) => ({ role, text: text2 }));
+  const history2 = messages.slice(0, -1).filter(({ role, text: text2 }) => role !== "assistant" || !text2.startsWith("\u53EF\u4EE5\u5148\u53C2\u8003\u79BE\u4F34\u7684\u5185\u7F6E\u6307\u5F15\u3002\n")).slice(-6).map(({ role, text: text2 }) => ({ role, text: text2 }));
   const draft = /提醒|叫我|记得/.test(input) ? parseReminder(input) : null;
   const validDraft = draft?.title && draft.at > Date.now() ? draft : null;
   let reply;
   let failure;
-  if (validDraft) reply = `\u6211\u542C\u5230\u7684\u662F\uFF1A${formatWhen(validDraft.at)}\uFF0C${validDraft.title}\u3002\u8BF7\u6838\u5BF9\u4E00\u4E0B\uFF0C\u518D\u4FDD\u5B58\u3002`;
+  if (validDraft) reply = `\u63D0\u9192\u5DF2\u7ECF\u586B\u597D\uFF1A${formatWhen(validDraft.at)}\uFF0C${validDraft.title}\u3002\u8BF7\u6838\u5BF9\u4E00\u4E0B\uFF0C\u518D\u4FDD\u5B58\u3002`;
   else {
     pendingReplies.set(mode, active);
     save();
@@ -2274,15 +2260,13 @@ async function sendMessage(text, retry = false) {
       if (!reply) throw new Error("\u6CA1\u6709\u6536\u5230\u56DE\u590D\u3002");
     } catch (error) {
       failure = error.message;
-      reply = "\u53EF\u4EE5\u5148\u53C2\u8003\u79BE\u4F34\u7684\u5185\u7F6E\u6307\u5F15\u3002\n" + answerFor(input, mode, state);
     } finally {
       if (pendingReplies.get(mode) === active) pendingReplies.delete(mode);
     }
   }
   if (account !== active) return;
-  const replyId = crypto.randomUUID();
-  messages.push({ id: replyId, role: "assistant", text: reply, draft: validDraft });
-  if (failure) failedReplies.set(mode, { account: active, text: input, error: failure, questionId, replyId });
+  if (failure) failedReplies.set(mode, { account: active, text: input, error: failure, questionId });
+  else messages.push({ id: crypto.randomUUID(), role: "assistant", text: reply, draft: validDraft });
   if (messages.length > 150) messages.splice(0, messages.length - 150);
   noteActivity();
   save();
@@ -2295,7 +2279,7 @@ async function sendMessage(text, retry = false) {
     document.querySelector(".message:last-child")?.scrollIntoView({ block: "nearest" });
     document.querySelector("#message-input")?.focus({ preventScroll: true });
   }
-  if (state.listen) speak(reply);
+  if (state.listen) speak(failure || reply);
 }
 function startVoice(button) {
   if (!voices) {

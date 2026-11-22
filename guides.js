@@ -1,7 +1,7 @@
 export const lifeGuides = [
   {
     id: 'parcel', version: 1, title: '快递柜取件', icon: 'parcel',
-    summary: '找到取件入口，柜门没开也知道怎么办',
+    summary: '找取件码，看看柜门没开怎么办',
     starts: ['home', 'code', 'blocked'],
     success: '这次取件指引走完了。',
     help: ['看看柜体上公示的客服电话或求助按钮。', '如果旁边有值守驿站，可以请工作人员帮您看当前画面。'],
@@ -34,8 +34,8 @@ export const lifeGuides = [
     },
   },
   {
-    id: 'bill', version: 1, title: '查本期电费', icon: 'bill',
-    summary: '找到本期账期和金额，看完就可以停',
+    id: 'bill', version: 1, title: '查电费账单', icon: 'bill',
+    summary: '找到账单日期和电费金额',
     starts: ['services', 'statement', 'payment'],
     success: '这次查账指引走完了。',
     help: ['回到您平时使用的供电服务入口，找「帮助」或「客服」。', '也可以拿着旧账单，到熟悉的便民点或供电营业厅询问。'],
