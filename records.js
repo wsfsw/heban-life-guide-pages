@@ -97,7 +97,9 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
           <button id="capture-analyze" class="button" type="submit" value="analyze" ${disabled}>${analyzing ? '正在分析…' : '分析这张照片'}</button>
           <button id="capture-save" class="button quiet" type="submit" value="save" ${disabled}>${saving ? '正在保存…' : '保存照片'}</button>
           <button class="button quiet" type="button" data-action="capture-reset" ${disabled}>重拍或换一张</button></div>
-        </form>${analysisPanel(analysis, analyzing)}`;
+        </form>
+        ${error ? `<p class="capture-error" id="capture-action-error" role="alert" tabindex="-1">${escapeHtml(error)}</p>` : ''}
+        ${analysisPanel(analysis, analyzing)}`;
     } else if (mode === 'opening' || mode === 'reading') {
       body = `<p class="capture-status" role="status">${mode === 'opening' ? '正在打开相机，请留意相机权限提示。' : '正在读取照片…'}</p>
         <button class="button quiet" type="button" data-action="capture-reset">取消</button>`;
@@ -113,7 +115,7 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
     }
     return `${pageHeader('拍照分析', back)}<main class="surface capture-screen">
       <div class="capture-intro"><div><h2>${reviewing ? '确认这张照片' : '拍下眼前的画面'}</h2>${help()}</div>${captureLink}</div>
-      ${error ? `<p class="capture-error" role="alert">${escapeHtml(error)}</p>` : ''}
+      ${error && !reviewing ? `<p class="capture-error" role="alert">${escapeHtml(error)}</p>` : ''}
       ${body}
     </main>`;
   }
@@ -246,8 +248,9 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
       current.error = error.message;
     } finally {
       current.mode = 'review';
-      redraw(current, current.error ? '#capture-analyze' : '#capture-analysis');
-      if (current === view && !current.error) document.querySelector('#capture-analysis')?.scrollIntoView({ block: 'nearest' });
+      const target = current.error ? '#capture-action-error' : '#capture-analysis';
+      redraw(current, target);
+      if (current === view) document.querySelector(target)?.scrollIntoView({ block: 'nearest' });
     }
   }
 

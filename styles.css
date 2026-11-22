@@ -473,6 +473,7 @@ body:has(.app-nav) .toast { bottom: calc(var(--nav-height) + 10px); }
 
 .bubble { white-space: pre-wrap; }
 .assistant-wait { color: var(--muted); font-size: 0.92rem; }
+.assistant-retry { display: grid; justify-items: start; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--sage); line-height: 1.45; }
 .analysis-panel, .shortcut-form { display: grid; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
 .analysis-panel p, .analysis-panel ol { line-height: 1.58; overflow-wrap: anywhere; }
 .analysis-panel h3, .analysis-panel ol { margin: 0; }
