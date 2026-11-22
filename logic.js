@@ -17,7 +17,7 @@ export function newState() {
   return {
     persona: '小禾', speechRate: 'normal', interests: '', contactName: '爸妈', phone: '', listen: false,
     monitoring: false, quietDays: 3, lastSeen: null, greeted: false,
-    reminders: [], shared: [], deviceGuides: [], guideRuns: {}, messages: { chat: [], ask: [], 'family-chat': [] },
+    reminders: [], shared: [], deviceGuides: [], guideRuns: {}, shortcuts: [], messages: { chat: [], ask: [], 'family-chat': [] },
   };
 }
 

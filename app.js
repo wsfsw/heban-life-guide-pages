@@ -7,6 +7,8 @@ import { lifeGuides, readGuideRun, setGuideScreen, previousGuideScreen } from '.
 import { api, photoUrl, connectCloud, saveCloud, flushCloud, unsyncedCloud } from './cloud.js';
 import { createRecords } from './records.js';
 import { signInWithDevice } from './sign-in.js';
+import { askAssistant } from './assistant-client.js';
+import { cleanShortcut, shortcutOptions } from './shortcuts.js';
 
 const app = document.querySelector('#app');
 const cloudSite = document.querySelector('meta[name="heban-cloud-site"]')?.content;
@@ -14,7 +16,9 @@ const dialog = document.querySelector('#dialog');
 const status = document.querySelector('#status');
 const accountBar = document.querySelector('#account-bar');
 const recordRoutes = ['capture', 'records', 'record'];
-const routes = ['elder', 'family', 'chat', 'ask', 'reminders', 'family-chat', 'family-reminders', 'devices', 'device', 'family-devices', 'device-editor', 'guides', 'guide', 'connections', 'shared-device', 'assistant-settings', 'mine', ...recordRoutes];
+const routes = ['elder', 'family', 'chat', 'ask', 'reminders', 'family-chat', 'family-reminders', 'family-shortcuts', 'devices', 'device', 'family-devices', 'device-editor', 'guides', 'guide', 'connections', 'shared-device', 'assistant-settings', 'mine', ...recordRoutes];
+const familyPages = ['elder', 'family-shortcuts', 'connections', 'shared-device'];
+const pendingReplies = new Map();
 const elderRoutes = ['elder', 'chat', 'ask', 'reminders', 'devices', 'device', 'guides', 'guide', 'shared-device', 'assistant-settings', 'mine', ...recordRoutes];
 const voices = window.SpeechRecognition || window.webkitSpeechRecognition;
 const longDate = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
@@ -160,11 +164,24 @@ const quickCards = [
   { link: 'devices', title: '家里设备', subtitle: '看图找按键', glyph: 'remote', color: 'mint' },
 ];
 
-function featureCard({ link, title, subtitle, glyph, color = 'blue' }) {
-  return `<a class="feature-card tone-${color}" href="#/${link}">
+function featureCard({ link, title, subtitle, glyph, color = 'blue', external = false }) {
+  return `<a class="feature-card tone-${color}" href="${escapeHtml(external ? link : '#/' + link)}" ${external ? 'target="_blank" rel="noopener noreferrer"' : ''}>
     <span class="feature-icon">${icon(glyph, 28)}</span>
     <span class="feature-text"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(subtitle)}</span></span>
   </a>`;
+}
+
+function addedFeatureCards() {
+  const items = [...state.shortcuts, ...(family?.shortcuts?.filter((item) => item.direction === 'received') ?? [])];
+  const seen = new Set();
+  return items.map((item) => {
+    const entry = cleanShortcut(item);
+    if (!entry || seen.has(entry.kind + entry.target)) return '';
+    seen.add(entry.kind + entry.target);
+    const description = item.name ? `${item.name}添加` : '家属端添加';
+    if (entry.kind === 'built-in') return featureCard({ ...shortcutOptions[entry.target], title: entry.title, subtitle: description, color: 'lilac' });
+    return featureCard({ link: entry.target, title: entry.title, subtitle: new URL(entry.target).hostname, glyph: 'question', color: 'mint', external: true });
+  }).join('');
 }
 
 function elderHome() {
@@ -172,13 +189,13 @@ function elderHome() {
   return `${homeHeader('elder')}<main class="surface home-screen">
     <div class="home-heading"><h1 id="screen-title" tabindex="-1">生活帮手</h1><p class="date">${longDate.format(new Date())}</p></div>
     <section class="feature-banner home-capture" aria-labelledby="capture-home-title">
-      <div class="banner-copy"><h2 id="capture-home-title">操作卡住了？</h2><p>拍下现场，稍后再看。</p>
-      <a class="button home-camera-button" href="#/capture/other/home">${icon('camera', 23)}拍照取证</a></div>
+      <div class="banner-copy"><h2 id="capture-home-title">操作卡住了？</h2><p>拍张照片，请助手看看。</p>
+      <a class="button home-camera-button" href="#/capture/other/home">${icon('camera', 23)}拍照分析</a></div>
       <img src="./assets/guide-kit.webp" width="520" height="434" alt="" fetchpriority="high">
     </section>
     <section class="tool-section" aria-labelledby="home-tools-title">
       <div class="section-heading"><h2 id="home-tools-title">常用功能</h2><a class="section-link" href="#/records">我的记录</a></div>
-      <div class="feature-grid">${quickCards.map(featureCard).join('')}</div>
+      <div class="feature-grid">${quickCards.map(featureCard).join('')}${addedFeatureCards()}</div>
     </section>
     <div class="app-list home-shortcuts">
       ${tile({ link: 'reminders', title: '设置提醒', subtitle: next ? `${formatWhen(next.at)}　${next.title}` : '记下接下来要做的事', glyph: 'bell' })}
@@ -232,9 +249,88 @@ function familyHome() {
       ${featureCard({ link: 'family-reminders', title: '联系提醒', subtitle: '记下打电话的时间', glyph: 'calendar', color: 'peach' })}
       ${featureCard({ link: 'family-devices', title: '制作设备卡', subtitle: '在照片上标出按键', glyph: 'photo', color: 'mint' })}
       ${featureCard({ link: 'family-chat', title: '跟助手聊聊', subtitle: '聊聊怎么关心家人', glyph: 'chat', color: 'lilac' })}
+      ${featureCard({ link: 'family-shortcuts', title: '长辈端常用功能', subtitle: '添加功能或网页入口', glyph: 'plus', color: 'blue' })}
     </div>
     ${state.phone ? '<button class="text-button" type="button" data-action="contact">修改联系人号码</button>' : ''}
   </main>`;
+}
+
+function familyShortcutsScreen() {
+  const head = pageHeader('长辈端常用功能', 'family');
+  if (!account.guest && !family && !familyError) return `${head}<main class="surface"><p class="empty-card" role="status">正在读取家人和功能…</p></main>`;
+  const links = family?.links ?? [];
+  const items = [...state.shortcuts, ...(family?.shortcuts?.filter((item) => item.direction === 'sent') ?? [])];
+  return `${head}<main class="surface shortcut-screen">
+    <form class="shortcut-form" data-form="family-shortcut">
+      <h2>添加一个功能</h2>
+      <label for="shortcut-recipient">加给谁？</label>
+      <select id="shortcut-recipient" name="recipient"><option value="local">${account.guest ? '这个浏览器的长辈端' : '当前账号的长辈端'}</option>
+        ${links.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}</select>
+      ${!links.length ? `<p class="form-help">想同步到家人的手机？先完成家庭连接。 <a class="section-link" href="#/connections">去连接</a></p>` : ''}
+      <label for="shortcut-kind">选一个入口</label>
+      <select id="shortcut-kind" name="kind">
+        ${Object.entries(shortcutOptions).map(([name, item]) => `<option value="${name}">${item.title}</option>`).join('')}
+        <option value="website">自定义网页</option>
+      </select>
+      <div class="shortcut-custom" data-shortcut-custom hidden>
+        <label for="shortcut-title">显示名称</label><input id="shortcut-title" name="title" maxlength="24" placeholder="例如：社区助餐">
+        <label for="shortcut-url">网页地址</label><input id="shortcut-url" name="target" type="url" inputmode="url" maxlength="500" placeholder="https://">
+      </div>
+      <p class="form-error" role="alert">${escapeHtml(familyError)}</p>
+      <button class="button" type="submit">${icon('plus', 21)}添加到长辈端</button>
+    </form>
+    <section class="shortcut-items"><h2>已添加</h2>
+      ${items.length ? `<ul class="record-list">${items.map((item) => `
+        <li class="shortcut-row"><div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.name || '本机长辈端')}</span></div>
+          <button class="button quiet" type="button" data-action="remove-shortcut" data-id="${escapeHtml(item.id)}" data-place="${item.direction === 'sent' ? 'remote' : 'local'}" aria-label="移除${escapeHtml(item.title)}">移除</button></li>`).join('')}</ul>` : '<p class="empty-card">还没有新增入口。</p>'}</section>
+  </main>`;
+}
+
+async function submitShortcut(form, data) {
+  const kind = data.get('kind');
+  const shortcut = cleanShortcut(kind === 'website'
+    ? { kind, title: data.get('title'), target: data.get('target') }
+    : { kind: 'built-in', target: kind });
+  const error = form.querySelector('.form-error');
+  if (!shortcut) { error.textContent = '请填写名称和以 https:// 开头的网页地址。'; return; }
+  const recipient = data.get('recipient');
+  if (recipient === 'local') {
+    if (state.shortcuts.some((item) => item.kind === shortcut.kind && item.target === shortcut.target)) { error.textContent = '这个入口已经添加过。'; return; }
+    if (state.shortcuts.length >= 12) { error.textContent = '最多可添加 12 个入口，请先移除一项。'; return; }
+    state.shortcuts.push({ id: crypto.randomUUID(), ...shortcut });
+    refresh('已添加到长辈端。');
+    return;
+  }
+  const active = account;
+  const button = form.querySelector('[type=submit]');
+  button.disabled = true;
+  try {
+    const result = await api('/api/family/shortcuts', 'POST', { recipient, ...shortcut });
+    if (account !== active) return;
+    family = result;
+    if (route === 'family-shortcuts') render();
+    notify('已添加到家人的长辈端。');
+  } catch (failure) { error.textContent = failure.message; }
+  finally { button.disabled = false; }
+}
+
+async function removeShortcut(button) {
+  const { id, place } = button.dataset;
+  if (place === 'local') {
+    state.shortcuts = state.shortcuts.filter((item) => item.id !== id);
+    refresh('功能入口已移除。');
+    return;
+  }
+  const active = account;
+  button.disabled = true;
+  try {
+    const result = await api(`/api/family/shortcuts/${encodeURIComponent(id)}`, 'DELETE');
+    if (account !== active) return;
+    family = result;
+    if (route === 'family-shortcuts') render();
+    notify('功能入口已移除。');
+  } catch (error) { notify(error.message); }
+  finally { button.disabled = false; }
 }
 
 const chatConfig = {
@@ -245,6 +341,7 @@ const chatConfig = {
 
 function chatScreen(mode) {
   const config = chatConfig[mode];
+  const waiting = pendingReplies.get(mode) === account;
   const greeting = config.greeting.replace('{name}', state.persona);
   const messages = [{ role: 'assistant', text: greeting }, ...state.messages[mode]];
   const toggle = `<button class="listen" data-action="listen" type="button" aria-pressed="${state.listen}">${icon('sound', 20)}听回复<span class="switch" aria-hidden="true"></span></button>`;
@@ -252,15 +349,15 @@ function chatScreen(mode) {
   return `${pageHeader(config.title, familyMode ? 'family' : 'elder', `<div class="toolbar chat-controls">${toggle}${familyMode ? '' : settings(mode)}</div>`)}<main class="surface conversation" data-mode="${mode}">
     ${familyMode ? '' : `<nav class="assistant-tabs" aria-label="助手模式"><a href="#/ask" ${mode === 'ask' ? 'aria-current="page"' : ''}>生活问答</a><a href="#/chat" ${mode === 'chat' ? 'aria-current="page"' : ''}>聊聊天</a></nav>
       <div class="assistant-tools" aria-label="助手工具">
-        ${featureCard({ link: 'capture', title: '拍照取证', subtitle: '拍下现场画面', glyph: 'camera', color: 'blue' })}
+        ${featureCard({ link: 'capture', title: '拍照分析', subtitle: '看看怎么操作', glyph: 'camera', color: 'blue' })}
         ${featureCard({ link: 'records', title: '我的记录', subtitle: '看现场照片', glyph: 'photo', color: 'lilac' })}
       </div>`}
-    <div class="message-list" role="log" aria-label="聊天记录">${messages.map(renderMessage).join('')}</div>
+    <div class="message-list" role="log" aria-label="聊天记录">${messages.map(renderMessage).join('')}${waiting ? '<p class="assistant-wait" role="status">禾伴正在回答…</p>' : ''}</div>
     <div class="composer-area">
-      <div class="examples" aria-label="常用说法">${config.examples.map((example) => `<button class="example" type="button" data-action="example" data-text="${escapeHtml(example)}">${escapeHtml(example)}</button>`).join('')}</div>
-      <form class="composer" data-form="message"><button class="icon-button mic" type="button" data-action="voice" aria-label="用语音输入">${icon('mic', 25)}</button>
-      <input id="message-input" name="message" aria-label="想说的话" placeholder="说说您想问的事" maxlength="300" autocomplete="off" required><button class="button" type="submit">发送</button></form>
-      <p class="chat-note">试用版 · 支持常见生活问题与提醒</p>
+      <div class="examples" aria-label="常用说法">${config.examples.map((example) => `<button class="example" type="button" data-action="example" data-text="${escapeHtml(example)}" ${waiting ? 'disabled' : ''}>${escapeHtml(example)}</button>`).join('')}</div>
+      <form class="composer" data-form="message"><button class="icon-button mic" type="button" data-action="voice" aria-label="用语音输入" ${waiting ? 'disabled' : ''}>${icon('mic', 25)}</button>
+      <input id="message-input" name="message" aria-label="想说的话" placeholder="说说您想问的事" maxlength="300" autocomplete="off" required ${waiting ? 'disabled' : ''}><button class="button" type="submit" ${waiting ? 'disabled' : ''}>发送</button></form>
+      <p class="chat-note">在线问答由 DeepSeek 提供，请避开账号和验证码。</p>
     </div></main>`;
 }
 
@@ -466,7 +563,7 @@ function guidesScreen() {
       return featureCard({ link: `guide/${guide.id}`, title: guide.title, subtitle: inProgress ? `继续：${inProgress}` : guide.summary, glyph: guide.icon, color: guide.id === 'parcel' ? 'peach' : 'lilac' });
     }).join('')}
       ${featureCard(quickCards[3])}
-      ${featureCard({ link: 'capture', title: '拍照取证', subtitle: '拍下卡住的画面', glyph: 'camera', color: 'blue' })}
+      ${featureCard({ link: 'capture', title: '拍照分析', subtitle: '拍下卡住的画面', glyph: 'camera', color: 'blue' })}
     </div>
     <p class="device-help">这里是操作演示。实际画面以现场设备或官方服务为准。</p>
   </main>`;
@@ -589,7 +686,7 @@ async function loadFamily() {
     (error) => { if (account === active) familyError = error.message; })
     .finally(() => { if (account === active) { familyLoad = null; familyBusy = false; } });
   await familyLoad;
-  if (account === active && ['connections', 'shared-device'].includes(route)) render();
+  if (account === active && familyPages.includes(route)) render();
 }
 
 function actionError(error) {
@@ -817,7 +914,7 @@ function render() {
     elder: elderHome, family: familyHome, chat: () => chatScreen('chat'), ask: () => chatScreen('ask'),
     'family-chat': () => chatScreen('family-chat'), reminders: () => remindersScreen('elder'),
     'family-reminders': () => remindersScreen('family'), devices: devicesScreen, device: deviceScreen,
-    'family-devices': familyDevicesScreen, 'device-editor': deviceEditorScreen, guides: guidesScreen, guide: guideScreen,
+    'family-devices': familyDevicesScreen, 'family-shortcuts': familyShortcutsScreen, 'device-editor': deviceEditorScreen, guides: guidesScreen, guide: guideScreen,
     connections: connectionsScreen, 'shared-device': deviceScreen,
     capture: records.captureScreen, records: records.recordsScreen, record: records.recordScreen, 'assistant-settings': assistantSettings, mine: mineScreen,
   };
@@ -895,18 +992,37 @@ function setSentence(text, form) {
   form.elements.title.focus();
 }
 
-function sendMessage(text) {
-  const input = text.trim();
+async function sendMessage(text) {
+  const input = text.trim().slice(0, 300);
   if (!input) return;
-  const messages = state.messages[route];
-  if (!messages) return;
+  const mode = route;
+  const active = account;
+  const messages = state.messages[mode];
+  if (!messages || pendingReplies.get(mode) === active) return;
+  const history = messages.slice(-6).map(({ role, text }) => ({ role, text }));
   const draft = /提醒|叫我|记得/.test(input) ? parseReminder(input) : null;
   const validDraft = draft?.title && draft.at > Date.now() ? draft : null;
-  const reply = validDraft ? `我听到的是：${formatWhen(validDraft.at)}，${validDraft.title}。请核对一下，再保存。` : answerFor(input, route, state);
-  messages.push({ id: crypto.randomUUID(), role: 'user', text: input }, { id: crypto.randomUUID(), role: 'assistant', text: reply, draft: validDraft });
+  messages.push({ id: crypto.randomUUID(), role: 'user', text: input });
+  let reply;
+  if (validDraft) reply = `我听到的是：${formatWhen(validDraft.at)}，${validDraft.title}。请核对一下，再保存。`;
+  else {
+    pendingReplies.set(mode, active);
+    save();
+    render();
+    document.querySelector('.assistant-wait')?.scrollIntoView({ block: 'nearest' });
+    try {
+      reply = (await askAssistant({ text: input, history, style: state.persona })).answer;
+      if (!reply) throw new Error('没有收到回复。');
+    }
+    catch { reply = '在线助手暂时无法回答。' + answerFor(input, mode, state); }
+    finally { if (pendingReplies.get(mode) === active) pendingReplies.delete(mode); }
+  }
+  if (account !== active) return;
+  messages.push({ id: crypto.randomUUID(), role: 'assistant', text: reply, draft: validDraft });
   if (messages.length > 150) messages.splice(0, messages.length - 150);
   noteActivity();
   save();
+  if (route !== mode || authPanel) return;
   render();
   document.querySelector('.message:last-child')?.scrollIntoView({ block: 'nearest' });
   document.querySelector('#message-input')?.focus({ preventScroll: true });
@@ -987,6 +1103,7 @@ document.addEventListener('click', (event) => {
   }
   if (!account) return;
   if (recordRoutes.includes(route) && action.startsWith('capture-')) { void records.action(action, button); return; }
+  if (action === 'remove-shortcut') { void removeShortcut(button); return; }
   if (action === 'cloud-retry') { void flushCloud(); return; }
   if (action === 'cloud-refresh') {
     showDialog('读取云端版本？', '<p class="form-help">本页尚未同步的修改将被放弃，账户会回到云端保存的版本。</p><button class="button wide" data-action="cloud-refresh-confirm" type="button">读取云端版本</button>');
@@ -1131,7 +1248,11 @@ document.addEventListener('submit', (event) => {
   const data = new FormData(form);
   switch (form.dataset.form) {
     case 'email-login': void submitEmailLogin(form, data); break;
-    case 'scene-record': void records.save(data); break;
+    case 'scene-record':
+      if (event.submitter?.value === 'analyze') void records.analyze(data);
+      else void records.save(data);
+      break;
+    case 'family-shortcut': void submitShortcut(form, data); break;
     case 'join-family':
     case 'share-family': void familyForm(form, data); break;
     case 'device-guide': saveDeviceGuide(form); break;
@@ -1180,6 +1301,12 @@ document.addEventListener('submit', (event) => {
 
 document.addEventListener('change', async (event) => {
   const field = event.target;
+  if (field.id === 'shortcut-kind') {
+    const custom = field.form.querySelector('[data-shortcut-custom]');
+    custom.hidden = field.value !== 'website';
+    for (const input of custom.querySelectorAll('input')) input.required = !custom.hidden;
+    return;
+  }
   if (field.name === 'persona' && field.form?.dataset.form === 'persona') {
     field.form.querySelector('.persona-preview').textContent = personas[field.value].preview;
     return;
@@ -1253,7 +1380,7 @@ function enterScreen(focus = false) {
   if (route === 'chat' && !state.greeted) { state.greeted = true; save(); }
   noteActivity();
   render();
-  if (['connections', 'shared-device'].includes(route)) void loadFamily();
+  if (familyPages.includes(route)) void loadFamily();
   if (focus) {
     window.scrollTo(0, 0);
     document.querySelector('#screen-title')?.focus({ preventScroll: true });
@@ -1272,6 +1399,7 @@ window.addEventListener('hashchange', () => {
 });
 document.addEventListener('visibilitychange', () => {
   noteActivity();
+  if (account && route === 'elder' && document.visibilityState === 'visible') void loadFamily();
   if (account) checkReminders();
 });
 window.addEventListener('pagehide', records.stopCamera);
