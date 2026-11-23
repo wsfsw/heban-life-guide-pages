@@ -10,8 +10,21 @@ export const phoneLessons = {
 };
 
 export const phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
-const androidTrial = 'https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk';
-const androidLaunch = `intent://phone/font#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
+const androidTrial = 'https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.2';
+const launchAndroid = (path) => `intent://phone/${path}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
+
+export function androidGuidePath(guide) {
+  if (guide.topic === 'font') return 'font';
+  if (!guide.steps?.length) return '';
+  const app = guide.topic === 'wifi' ? 'settings' : guide.androidApp || '';
+  const plan = {
+    title: guide.title || (guide.topic === 'wifi' ? '连接无线网' : '手机操作引导'),
+    app,
+    steps: guide.steps.slice(0, 5).map((text, i) => ({ text, target: guide.targets?.[i] || '',
+      ...(guide.apps?.[i] ? { app: guide.apps[i] } : {}) })),
+  };
+  return 'steps?plan=' + encodeURIComponent(JSON.stringify(plan));
+}
 
 export function phoneTopic(question) {
   const text = question.trim().replace(/[\s？?。，！!\-]/g, '').toLowerCase();
@@ -65,6 +78,16 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
   const button = (name, label) => `<button type="button" class="text-button" data-action="phone-${name}">${label}</button>`;
   const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
 
+  function androidLinks(path) {
+    const href = esc(launchAndroid(path));
+    return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">开启跨应用引导</a>
+      <a class="text-button" href="${androidTrial}">下载安装包</a></div>`;
+  }
+
+  function directLink(question) {
+    return /Android/i.test(navigator.userAgent) && phoneTopic(question) === 'font' ? androidLinks('font') : '';
+  }
+
   function controls(id) {
     if (!visible || current?.id !== id) return '';
     const { platform, pending, error, steps, index, clarification, muted } = current;
@@ -77,10 +100,9 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
     else content = (index ? button('previous', '上一步') : '') + button('listen', '重听')
       + (muted ? '' : button('mute', '关声音')) + (muted && lineIndex < lines.length - 1 ? button('more', '下一句') : '')
       + button('next', index + 1 < steps.length ? '下一步' : '做完了');
-    const trial = platform === 'android' && current.topic === 'font' && /Android/i.test(navigator.userAgent)
-      ? `<a class="text-button" href="${androidLaunch}">安卓光点引导（试用）</a><a class="text-button" href="${androidTrial}">下载试用版</a>` : '';
+    const path = platform === 'android' ? androidGuidePath(current) : '';
     return `<div class="phone-guide-controls" aria-label="字幕和进度">${content}
-      ${platform && !pending ? button('change', '换手机') : ''}${button('end', '结束')}${trial}</div>`;
+      ${platform && !pending ? button('change', '换手机') : ''}${button('end', '结束')}${path ? androidLinks(path) : ''}</div>`;
   }
 
   function playNative(start) {
@@ -132,7 +154,8 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
   }
 
   async function load(platform) {
-    const active = current = { ...current, platform, steps: [], index: 0, pending: true, error: '', clarification: '', topic: '' };
+    const active = current = { ...current, platform, steps: [], index: 0, pending: true, error: '', clarification: '',
+      topic: '', title: '', androidApp: '', targets: [], apps: [] };
     const topic = phoneTopic(active.question);
     if (topic) {
       Object.assign(active, { steps: phoneLessons[platform][topic], topic, pending: false });
@@ -162,6 +185,7 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
   }
 
   function action(name) {
+    if (name === 'handoff') { stop(); stopSpeech(); return; }
     if (!visible || !current) return;
     switch (name) {
       case 'android':
@@ -196,5 +220,5 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
     stop();
     showLine(0);
   }
-  return { open, action, controls, close, reset() { close(); current = null; } };
+  return { open, action, controls, directLink, close, reset() { close(); current = null; } };
 }

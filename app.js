@@ -1836,8 +1836,23 @@ var phoneLessons = {
   }
 };
 var phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
-var androidTrial = "https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk";
-var androidLaunch = `intent://phone/font#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
+var androidTrial = "https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.2";
+var launchAndroid = (path2) => `intent://phone/${path2}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
+function androidGuidePath(guide) {
+  if (guide.topic === "font") return "font";
+  if (!guide.steps?.length) return "";
+  const app2 = guide.topic === "wifi" ? "settings" : guide.androidApp || "";
+  const plan = {
+    title: guide.title || (guide.topic === "wifi" ? "\u8FDE\u63A5\u65E0\u7EBF\u7F51" : "\u624B\u673A\u64CD\u4F5C\u5F15\u5BFC"),
+    app: app2,
+    steps: guide.steps.slice(0, 5).map((text, i) => ({
+      text,
+      target: guide.targets?.[i] || "",
+      ...guide.apps?.[i] ? { app: guide.apps[i] } : {}
+    }))
+  };
+  return "steps?plan=" + encodeURIComponent(JSON.stringify(plan));
+}
 function phoneTopic(question) {
   const text = question.trim().replace(/[\s？?。，！!\-]/g, "").toLowerCase();
   if (/^(怎么|如何|想|请问|请问怎么|帮我)?(把)?(手机)?(放大|调大|增大)(手机)?(字体|字|字号)(呢|吗)?$/.test(text) || /^(手机)?(字体|字|字号)太小(了)?(怎么办)?$/.test(text)) return "font";
@@ -1883,6 +1898,14 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
   }
   const button2 = (name, label) => `<button type="button" class="text-button" data-action="phone-${name}">${label}</button>`;
   const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
+  function androidLinks(path2) {
+    const href = esc(launchAndroid(path2));
+    return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">\u5F00\u542F\u8DE8\u5E94\u7528\u5F15\u5BFC</a>
+      <a class="text-button" href="${androidTrial}">\u4E0B\u8F7D\u5B89\u88C5\u5305</a></div>`;
+  }
+  function directLink(question) {
+    return /Android/i.test(navigator.userAgent) && phoneTopic(question) === "font" ? androidLinks("font") : "";
+  }
   function controls(id) {
     if (!visible || current?.id !== id) return "";
     const { platform, pending: pending2, error, steps, index, clarification, muted } = current;
@@ -1893,9 +1916,9 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
     else if (!steps.length) content = `<span role="status">${esc(clarification)}</span>`;
     else if (index >= steps.length) content = '<span role="status">\u5DF2\u5B8C\u6210</span>' + button2("restart", "\u518D\u6765\u4E00\u6B21");
     else content = (index ? button2("previous", "\u4E0A\u4E00\u6B65") : "") + button2("listen", "\u91CD\u542C") + (muted ? "" : button2("mute", "\u5173\u58F0\u97F3")) + (muted && lineIndex < lines.length - 1 ? button2("more", "\u4E0B\u4E00\u53E5") : "") + button2("next", index + 1 < steps.length ? "\u4E0B\u4E00\u6B65" : "\u505A\u5B8C\u4E86");
-    const trial = platform === "android" && current.topic === "font" && /Android/i.test(navigator.userAgent) ? `<a class="text-button" href="${androidLaunch}">\u5B89\u5353\u5149\u70B9\u5F15\u5BFC\uFF08\u8BD5\u7528\uFF09</a><a class="text-button" href="${androidTrial}">\u4E0B\u8F7D\u8BD5\u7528\u7248</a>` : "";
+    const path2 = platform === "android" ? androidGuidePath(current) : "";
     return `<div class="phone-guide-controls" aria-label="\u5B57\u5E55\u548C\u8FDB\u5EA6">${content}
-      ${platform && !pending2 ? button2("change", "\u6362\u624B\u673A") : ""}${button2("end", "\u7ED3\u675F")}${trial}</div>`;
+      ${platform && !pending2 ? button2("change", "\u6362\u624B\u673A") : ""}${button2("end", "\u7ED3\u675F")}${path2 ? androidLinks(path2) : ""}</div>`;
   }
   function playNative(start) {
     const active = narration = {};
@@ -1957,7 +1980,20 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
     if (ready() && !current.muted) play();
   }
   async function load(platform) {
-    const active = current = { ...current, platform, steps: [], index: 0, pending: true, error: "", clarification: "", topic: "" };
+    const active = current = {
+      ...current,
+      platform,
+      steps: [],
+      index: 0,
+      pending: true,
+      error: "",
+      clarification: "",
+      topic: "",
+      title: "",
+      androidApp: "",
+      targets: [],
+      apps: []
+    };
     const topic = phoneTopic(active.question);
     if (topic) {
       Object.assign(active, { steps: phoneLessons[platform][topic], topic, pending: false });
@@ -1989,6 +2025,11 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
     else step();
   }
   function action(name) {
+    if (name === "handoff") {
+      stop();
+      stopSpeech2();
+      return;
+    }
     if (!visible || !current) return;
     switch (name) {
       case "android":
@@ -2039,7 +2080,7 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
     stop();
     showLine(0);
   }
-  return { open, action, controls, close, reset() {
+  return { open, action, controls, directLink, close, reset() {
     close();
     current = null;
   } };
@@ -2506,7 +2547,10 @@ function chatScreen(mode) {
     </div></main>`;
 }
 function phoneGuideButton(questionId) {
-  return phoneGuide.controls(questionId) || `<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
+  const guide = phoneGuide.controls(questionId);
+  if (guide) return guide;
+  const question = state.messages.ask.find((item) => item.role === "user" && item.id === questionId)?.text;
+  return `${question ? phoneGuide.directLink(question) : ""}<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
 }
 function renderMessage(message) {
   const tools = [];

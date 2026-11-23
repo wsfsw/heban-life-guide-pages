@@ -517,6 +517,7 @@ body:has(.app-nav) .toast { bottom: calc(var(--nav-height) + 10px); }
 .phone-offer { min-height: 48px; text-align: left; }
 .phone-guide-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; }
 .phone-guide-controls .text-button { min-height: 44px; padding-inline: 4px; }
+.phone-background-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; flex-basis: 100%; }
 .phone-caption-line {
   position: sticky;
   z-index: 6;
