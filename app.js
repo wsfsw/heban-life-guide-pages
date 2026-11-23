@@ -2128,6 +2128,8 @@ var pendingReplies = /* @__PURE__ */ new Map();
 var failedReplies = /* @__PURE__ */ new Map();
 var elderRoutes = ["elder", "home-shortcuts", "chat", "ask", "reminders", "devices", "device", "guides", "guide", "shared-device", "assistant-settings", "mine", "electricity-card", ...recordRoutes];
 var voices = window.SpeechRecognition || window.webkitSpeechRecognition;
+var androidRelease = "0.5";
+var installedAndroid = navigator.userAgent.match(/\bHebanAndroid\/([\d.]+)/)?.[1];
 var longDate = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" });
 var repeats = { never: "\u53EA\u63D0\u9192\u4E00\u6B21", daily: "\u6BCF\u5929\u63D0\u9192", weekly: "\u6BCF\u5468\u63D0\u9192" };
 var symbol = {
@@ -2393,6 +2395,12 @@ function mineScreen() {
       <div><h2>${escapeHtml(account.name)}</h2><p>${account.guest ? account.temporary ? "\u672C\u6B21\u6D4F\u89C8\u53EF\u7528" : "\u8BB0\u5F55\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668" : "\u8BB0\u5F55\u4FDD\u5B58\u5230\u4E91\u7AEF"}</p></div>
       ${account.guest ? loginAction("\u767B\u5F55") : '<button class="button quiet" data-action="account-signout" type="button">\u9000\u51FA\u767B\u5F55</button>'}
     </div>
+    <section class="profile-card tone-blue" aria-labelledby="android-download-title">
+      <div><h2 id="android-download-title">\u79BE\u4F34\u5B89\u5353\u5B89\u88C5\u5305</h2><p>\u7248\u672C ${androidRelease} \xB7 \u652F\u6301\u8DE8\u5E94\u7528\u5C4F\u5E55\u5F15\u5BFC</p>
+        ${installedAndroid ? `<p>\u5F53\u524D\u5DF2\u5B89\u88C5 ${installedAndroid}${installedAndroid === androidRelease ? "" : "\u3002\u70B9\u4E0A\u65B9\u300C\u7528\u6D4F\u89C8\u5668\u6253\u5F00\u300D\u53EF\u4EE5\u4E0B\u8F7D\u65B0\u7248\u3002"}</p>` : ""}
+      </div>
+      ${installedAndroid ? "" : `<a class="button" href="./heban-screen-guide.apk?v=${androidRelease}" download="Heban-${androidRelease}.apk">\u4E0B\u8F7D\u5B89\u88C5\u5305</a>`}
+    </section>
     <div class="app-list">
       ${tile({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u770B\u770B\u5B58\u4E0B\u7684\u7167\u7247", glyph: "photo" })}
       ${tile({ link: "reminders", title: "\u6211\u7684\u63D0\u9192", subtitle: "\u770B\u65F6\u95F4\uFF0C\u4E5F\u53EF\u4EE5\u6539\u65F6\u95F4", glyph: "bell" })}
