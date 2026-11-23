@@ -376,13 +376,13 @@ async function readGuest() {
 function saveGuest(state2) {
   return storage("data", "put", state2, "state");
 }
-async function guestRecords(path, method, body) {
-  const id = path.match(/^\/api\/records\/([0-9a-f-]{36})$/)?.[1];
-  if (path === "/api/records" && method === "GET") {
+async function guestRecords(path2, method, body) {
+  const id = path2.match(/^\/api\/records\/([0-9a-f-]{36})$/)?.[1];
+  if (path2 === "/api/records" && method === "GET") {
     const records2 = await storage("records", "getAll");
     return { records: records2.sort((a, b) => b.createdAt - a.createdAt) };
   }
-  if (path === "/api/records" && method === "POST") {
+  if (path2 === "/api/records" && method === "POST") {
     const records2 = await storage("records", "getAll");
     if (records2.length >= 24) throw new Error("\u6700\u591A\u4FDD\u5B58 24 \u6761\u73B0\u573A\u8BB0\u5F55\uFF0C\u8BF7\u5148\u6574\u7406\u65E7\u7167\u7247\u3002");
     const record = { ...body, id: crypto.randomUUID(), createdAt: Date.now() };
@@ -409,13 +409,13 @@ var blocked = false;
 var onChange = () => {
 };
 var transport = "account";
-async function api(path, method = "GET", body) {
-  if (transport === "guest" && path.startsWith("/api/records")) return guestRecords(path, method, body);
-  if (transport === "guest" && path.startsWith("/api/family")) throw new Error("\u767B\u5F55\u540E\u53EF\u4EE5\u4E0E\u5BB6\u4EBA\u8FDE\u63A5\u548C\u5206\u4EAB\u3002");
+async function api(path2, method = "GET", body) {
+  if (transport === "guest" && path2.startsWith("/api/records")) return guestRecords(path2, method, body);
+  if (transport === "guest" && path2.startsWith("/api/family")) throw new Error("\u767B\u5F55\u540E\u53EF\u4EE5\u4E0E\u5BB6\u4EBA\u8FDE\u63A5\u548C\u5206\u4EAB\u3002");
   const headers = new Headers();
   headers.set(transport === "legacy" ? "X-Heban-Legacy" : "X-Heban-Account", "1");
   if (body !== void 0) headers.set("Content-Type", "application/json");
-  const response = await fetch(path, {
+  const response = await fetch(path2, {
     method,
     cache: "no-store",
     credentials: "same-origin",
@@ -430,9 +430,9 @@ async function api(path, method = "GET", body) {
   }
   return data;
 }
-function photoUrl(path) {
-  if (!path?.startsWith("/api/")) return path;
-  return path + (transport === "legacy" ? "?identity=legacy" : "?identity=account");
+function photoUrl(path2) {
+  if (!path2?.startsWith("/api/")) return path2;
+  return path2 + (transport === "legacy" ? "?identity=legacy" : "?identity=account");
 }
 async function connectCloud(listener, mode = "account") {
   clearTimeout(timer);
@@ -799,13 +799,13 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
       if (current === view) document.querySelector(target)?.scrollIntoView({ block: "nearest" });
     }
   }
-  async function action(name, button) {
+  async function action(name, button2) {
     const current = view;
     if (!current) return;
     switch (name) {
       case "capture-choice": {
         const form = document.querySelector('[data-form="scene-record"]');
-        if (form) await analyze(new FormData(form), button.dataset.text);
+        if (form) await analyze(new FormData(form), button2.dataset.text);
         break;
       }
       case "capture-open":
@@ -826,7 +826,7 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
         showDialog2("\u5220\u9664\u8FD9\u6761\u8BB0\u5F55\uFF1F", '<p class="form-help">\u8FD9\u5F20\u7167\u7247\u548C\u5907\u6CE8\u4F1A\u4E00\u8D77\u5220\u9664\u3002</p><div class="dialog-actions"><button class="button quiet" type="button" data-action="close">\u53D6\u6D88</button><button class="button danger" type="button" data-action="capture-confirm-delete">\u5220\u9664</button></div>');
         break;
       case "capture-confirm-delete":
-        button.disabled = true;
+        button2.disabled = true;
         try {
           await api(`/api/records/${encodeURIComponent(current.id)}`, "DELETE");
           if (view !== current) return;
@@ -1310,6 +1310,520 @@ function cleanShortcut(source) {
   }
 }
 
+// electricity.js
+var path = "/api/family/cards";
+var cardLink = (id) => "electricity-card/" + id;
+var editLink = (id) => "electricity-editor/" + id;
+var newStep = (text = "") => ({ id: crypto.randomUUID(), text, photo: "", x: null, y: null, audio: "" });
+var button = (action, label, kind = "quiet", extra = "") => `<button class="button ${kind}" type="button" data-action="electricity-${action}" ${extra}>${label}</button>`;
+var audioTypes = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"];
+var pictureInputTypes = "image/jpeg,image/png,image/webp";
+function dataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("\u8BFB\u53D6\u6587\u4EF6\u5931\u8D25\uFF0C\u8BF7\u91CD\u65B0\u9009\u62E9\u3002"));
+    reader.readAsDataURL(file);
+  });
+}
+async function readAudio(file) {
+  const type = file.type.split(";")[0];
+  if (!audioTypes.includes(type) || file.size > 265e3) throw new Error("\u8BF7\u9009\u62E9\u5C0F\u4E8E 260 KB \u7684\u77ED\u5F55\u97F3\uFF0C\u652F\u6301 MP3\u3001M4A\u3001WAV\u3001WebM \u548C OGG\u3002");
+  return dataUrl(file);
+}
+function createElectricityCards({ api: api2, escapeHtml: escapeHtml2, pageHeader: pageHeader2, loginAction: loginAction2, render: render2, speak: speak2, stopSpeech: stopSpeech2, account: getAccount, family: getFamily }) {
+  const esc = escapeHtml2;
+  const element = () => document.querySelector(".electricity-screen");
+  let cards = [];
+  let section = "";
+  let selected = "";
+  let data;
+  let draft;
+  let help;
+  let index = 0;
+  let preview = false;
+  let finished = false;
+  let sent = false;
+  let error = "";
+  let busy = false;
+  let loaded = false;
+  let context = {};
+  let listLoad;
+  let recording;
+  let audio;
+  let cachedCard;
+  function stopAudio() {
+    audio?.pause();
+    audio = null;
+    stopSpeech2();
+  }
+  function cancelRecording() {
+    const current = recording;
+    if (!current) return;
+    recording = null;
+    clearTimeout(current.timer);
+    current.stream?.getTracks().forEach((track) => track.stop());
+    if (current.recorder?.state === "recording") current.recorder.stop();
+  }
+  function reset() {
+    cards = [];
+    loaded = false;
+    listLoad = null;
+    cachedCard = null;
+    section = "";
+    cancelRecording();
+    stopAudio();
+    context = {};
+  }
+  async function loadList(show = false) {
+    if (getAccount()?.guest) return;
+    if (listLoad) {
+      await listLoad;
+      if (show && section === "electricity-cards") render2();
+      return;
+    }
+    const account2 = getAccount();
+    const active = context;
+    const job = api2(path).then((result) => {
+      if (getAccount() !== account2) return;
+      cards = result.cards;
+      loaded = true;
+      if (cachedCard && !cards.some((item) => item.id === cachedCard.id)) cachedCard = null;
+    }).catch((failure) => {
+      if (context === active && !loaded) error = failure.message;
+    }).finally(() => {
+      if (listLoad === job) listLoad = null;
+      if (getAccount() === account2 && (show && context === active || ["elder", "home-shortcuts", "family"].includes(section))) render2();
+    });
+    listLoad = job;
+    return job;
+  }
+  function startDraft(card) {
+    return card ? { ...card, steps: structuredClone(card.steps) } : {
+      title: "\u67E5\u8001\u5BB6\u7535\u8D39",
+      recipient: "",
+      steps: [newStep("\u6253\u5F00\u5BB6\u91CC\u5E73\u65F6\u7528\u7684\u7F34\u8D39\u670D\u52A1\u3002"), newStep("\u627E\u5230\u201C\u7535\u8D39\u201D\u6216\u201C\u7528\u7535\u8D26\u5355\u201D\uFF0C\u70B9\u8FDB\u53BB\u3002"), newStep("\u770B\u6E05\u6237\u540D\u548C\u6708\u4EFD\uFF0C\u518D\u67E5\u770B\u8FD9\u6708\u7684\u7528\u7535\u548C\u8D26\u5355\u3002")]
+    };
+  }
+  async function open(route2, id = "") {
+    cancelRecording();
+    stopAudio();
+    section = route2;
+    selected = id;
+    const active = context = {};
+    data = draft = help = null;
+    index = 0;
+    finished = preview = sent = busy = false;
+    error = "";
+    if (["elder", "home-shortcuts", "family"].includes(route2)) {
+      void loadList();
+      return;
+    }
+    if (!route2.startsWith("electricity-") || getAccount()?.guest) return;
+    if (route2 === "electricity-cards") {
+      void loadList(true);
+      return;
+    }
+    if (!id && route2 === "electricity-editor") {
+      draft = startDraft();
+      return;
+    }
+    try {
+      const card = await api2(path + "/" + id);
+      if (active !== context) return;
+      if (route2 === "electricity-editor") {
+        if (card.direction !== "sent") throw new Error("\u8BF7\u8BA9\u5236\u4F5C\u8FD9\u5F20\u5361\u7684\u5BB6\u4EBA\u6765\u4FEE\u6539\u3002");
+        draft = startDraft(card);
+        index = Math.max(0, draft.steps.findIndex((step) => step.id === draft.issue?.stepId));
+      } else {
+        if (card.direction !== "received") throw new Error("\u8BF7\u5728\u5BB6\u5C5E\u7AEF\u9884\u89C8\u8FD9\u5F20\u64CD\u4F5C\u5361\u3002");
+        data = card;
+        cachedCard = card;
+      }
+    } catch (failure) {
+      if (active !== context) return;
+      if (!failure.status && route2 === "electricity-card" && cachedCard?.id === id) {
+        data = cachedCard;
+        error = "\u7F51\u7EDC\u6682\u65F6\u8FDE\u4E0D\u4E0A\uFF0C\u6B63\u5728\u770B\u4E0A\u6B21\u6253\u5F00\u7684\u7248\u672C\u3002";
+      } else {
+        if (cachedCard?.id === id) cachedCard = null;
+        error = failure.message;
+      }
+    }
+    if (active === context) render2();
+  }
+  const back = () => section === "electricity-card" ? "elder" : "electricity-cards";
+  const photo = (src, pin, editable = false) => {
+    if (!src) return "";
+    const mark = pin?.x != null ? `<span class="photo-pin" style="--left:${pin.x * 100}%;--top:${pin.y * 100}%" aria-hidden="true"></span>` : "";
+    const tag = editable ? "button" : "div";
+    return `<div class="photo-board electricity-photo"><${tag} class="photo-target" ${editable ? 'type="button" data-action="electricity-pin" aria-label="\u5728\u622A\u56FE\u4E0A\u6807\u51FA\u4F4D\u7F6E"' : ""}><img class="device-photo-image" src="${esc(src)}" alt="${editable ? "\u5F85\u6807\u8BB0\u7684\u64CD\u4F5C\u622A\u56FE" : "\u8FD9\u4E00\u6B65\u7684\u64CD\u4F5C\u622A\u56FE"}">${mark}</${tag}></div>`;
+  };
+  const message = () => `<p class="form-error" role="alert">${esc(error)}</p>`;
+  const renderStep = (focus) => {
+    render2();
+    element()?.querySelector(focus)?.focus({ preventScroll: true });
+  };
+  function screenList() {
+    const account2 = getAccount();
+    const sentCards = cards.filter((item) => item.direction === "sent");
+    const links = getFamily()?.links ?? [];
+    const available = links.filter((link) => !sentCards.some((item) => item.recipient === link.id));
+    const body = account2.guest ? `<p class="empty-card">\u767B\u5F55\u79BE\u4F34\u5E76\u8FDE\u63A5\u5BB6\u4EBA\u540E\uFF0C\u5C31\u80FD\u628A\u64CD\u4F5C\u5361\u9001\u5230\u5BF9\u65B9\u9996\u9875\u3002</p>${loginAction2("\u7528\u90AE\u7BB1\u767B\u5F55", "button", "electricity-cards")}` : `${sentCards.length ? `<ul class="record-list">${sentCards.map((item) => `<li class="shortcut-row"><div><strong>${esc(item.title)}</strong>
+        <span>${item.needsHelp ? "\u5BB6\u4EBA\u8BF4\u6709\u4E00\u6B65\u753B\u9762\u4E0D\u4E00\u6837" : esc(links.find((link) => link.id === item.recipient)?.name ?? "\u5DF2\u53D1\u9001\u7ED9\u5BB6\u4EBA")}</span></div>
+        <a class="button quiet" href="#/${editLink(item.id)}">${item.needsHelp ? "\u67E5\u770B\u6C42\u52A9" : "\u4FEE\u6539"}</a></li>`).join("")}</ul>` : ""}
+          ${loaded && available.length ? '<a class="button" href="#/electricity-editor">\u65B0\u5EFA\u67E5\u7535\u8D39\u5361</a>' : !links.length ? '<a class="button quiet" href="#/connections">\u5148\u8FDE\u63A5\u5BB6\u4EBA</a>' : ""}
+        ${!loaded && !error ? '<p role="status">\u6B63\u5728\u8BFB\u53D6\u64CD\u4F5C\u5361\u2026</p>' : ""}${message()}${error ? button("list-reload", "\u91CD\u65B0\u8BFB\u53D6") : ""}`;
+    return `${pageHeader2("\u67E5\u7535\u8D39\u64CD\u4F5C\u5361", "family")}<main class="surface electricity-screen stack">${body}</main>`;
+  }
+  function screenEditor() {
+    const links = (getFamily()?.links ?? []).filter((link) => !cards.some((item) => item.direction === "sent" && item.recipient === link.id));
+    const step = draft.steps[index];
+    const flagged = draft.issue?.stepId === step.id;
+    return `${pageHeader2(draft.id ? "\u4FEE\u6539\u67E5\u7535\u8D39\u5361" : "\u5236\u4F5C\u67E5\u7535\u8D39\u5361", back())}<main class="surface electricity-screen guide-editor">
+      <form data-form="electricity-publish">
+        ${draft.id ? "" : `<label for="electricity-recipient">\u53D1\u7ED9\u8C01\uFF1F</label>
+          <select id="electricity-recipient" data-electricity-field="recipient" required>
+          <option value="">\u9009\u4E00\u4F4D\u5BB6\u4EBA</option>${links.map((link) => `<option value="${esc(link.id)}" ${draft.recipient === link.id ? "selected" : ""}>${esc(link.name)}</option>`).join("")}</select>
+          ${links.length ? "" : '<a class="section-link" href="#/connections">\u5148\u8FDE\u63A5\u5BB6\u4EBA</a>'}`}
+        <label for="electricity-title">\u9996\u9875\u6309\u94AE\u53EB\u4EC0\u4E48\uFF1F</label><input id="electricity-title" data-electricity-field="title" maxlength="26" value="${esc(draft.title)}" required>
+        <div class="electricity-step-tabs" aria-label="\u9009\u62E9\u8981\u7F16\u8F91\u7684\u6B65\u9AA4">${draft.steps.map((_, i) => button("select", `\u7B2C ${i + 1} \u6B65`, i === index ? "" : "quiet", `data-index="${i}" aria-pressed="${i === index}"`)).join("")}
+          ${draft.steps.length < 5 ? button("add", "\u52A0\u4E00\u6B65") : ""}</div>
+        ${flagged ? `<section class="empty-card electricity-notice"><strong>\u5BB6\u4EBA\u8BF4\u8FD9\u4E00\u6B65\u7684\u753B\u9762\u4E0D\u4E00\u6837</strong>${draft.issue.photo ? photo(draft.issue.photo) : ""}</section>` : ""}
+        <label for="electricity-text">\u8FD9\u4E00\u6B65\u8981\u505A\u4EC0\u4E48\uFF1F</label><textarea id="electricity-text" rows="2" data-electricity-step="text" maxlength="100">${esc(step.text)}</textarea>
+        <label for="electricity-screenshot">\u9009\u4E00\u5F20\u5B9E\u9645\u64CD\u4F5C\u7684\u622A\u56FE</label><input id="electricity-screenshot" type="file" accept="${pictureInputTypes}" data-electricity-file="photo">
+        ${step.photo ? `<p class="device-help">\u70B9\u56FE\u4E0A\u8981\u6309\u7684\u4F4D\u7F6E\uFF0C\u4E5F\u53EF\u4EE5\u7528\u65B9\u5411\u952E\u6807\u8BB0\u3002${step.x === null ? "" : "\u5DF2\u6807\u597D\u4F4D\u7F6E\u3002"}</p>${photo(step.photo, step, true)}` : '<p class="device-help">\u8BF7\u5148\u906E\u4F4F\u6237\u53F7\u3001\u59D3\u540D\u7B49\u4E2A\u4EBA\u4FE1\u606F\uFF0C\u518D\u9009\u56FE\u3002</p>'}
+        <div class="electricity-actions">${recording ? button("stop-recording", recording.recorder ? "\u7ED3\u675F\u5F55\u97F3" : "\u53D6\u6D88\u5F55\u97F3") : button("record", step.audio ? "\u91CD\u65B0\u5F55\u4E00\u53E5" : "\u5F55\u4E00\u53E5\u5BB6\u4EBA\u7684\u8BDD")}
+          ${step.audio ? button("listen", "\u8BD5\u542C\u5F55\u97F3") + button("remove-audio", "\u79FB\u9664\u5F55\u97F3") : ""}</div>
+        <details><summary>\u9009\u62E9\u5DF2\u6709\u5F55\u97F3</summary><input aria-label="\u9009\u62E9\u5DF2\u6709\u77ED\u5F55\u97F3" type="file" accept="audio/*,.m4a" data-electricity-file="audio"></details>
+        ${draft.steps.length > 1 ? button("remove", "\u79FB\u9664\u8FD9\u4E00\u6B65") : ""}
+        ${message()}
+        <div class="electricity-actions">${button("preview", "\u6309\u957F\u8F88\u770B\u5230\u7684\u6837\u5B50\u9884\u89C8", "quiet")}
+          <button class="button" type="submit" ${busy || recording ? "disabled" : ""}>${busy ? "\u6B63\u5728\u53D1\u9001\u2026" : draft.id ? "\u4FDD\u5B58\u65B0\u7248" : "\u53D1\u9001\u5230\u957F\u8F88\u9996\u9875"}</button></div>
+      </form></main>`;
+  }
+  function screenReader(card) {
+    const step = card.steps[index];
+    const title = preview ? "\u9884\u89C8\u64CD\u4F5C\u5361" : card.title;
+    const closePreview = preview ? button("edit", "\u8FD4\u56DE\u7F16\u8F91") : "";
+    const body = finished ? `<div class="empty-card"><h2>\u5DF2\u8D70\u5B8C\u8FD9\u5F20\u5361</h2><p>\u4E0B\u6B21\u53EF\u4EE5\u4ECE\u9996\u9875\u518D\u6253\u5F00\u3002</p></div>
+      ${preview ? closePreview : '<a class="button" href="#/elder">\u56DE\u9996\u9875</a>'}${button("start-over", "\u518D\u770B\u4E00\u904D")}` : `<p class="electricity-progress">\u7B2C ${index + 1} \u6B65\uFF0C\u5171 ${card.steps.length} \u6B65</p>
+        ${photo(step.photo, step)}<h2 id="electricity-instruction" tabindex="-1">${esc(step.text)}</h2>
+        ${button("listen", step.audio ? "\u542C\u5BB6\u4EBA\u8BF4" : "\u542C\u8FD9\u4E00\u6B65")}
+        <div class="electricity-reader-nav">${index > 0 ? button("previous", "\u4E0A\u4E00\u6B65") : ""}${button("next", index + 1 === card.steps.length ? "\u6211\u505A\u5B8C\u4E86" : "\u4E0B\u4E00\u6B65", "")}</div>
+        ${preview ? closePreview : help ? `<form data-form="electricity-help" class="electricity-help">
+          <h3>\u8BF7\u5BB6\u4EBA\u770B\u770B\u7B2C ${index + 1} \u6B65</h3><p>\u5BB6\u4EBA\u4F1A\u77E5\u9053\u60A8\u5361\u5728\u54EA\u4E00\u6B65\u3002\u60A8\u4E5F\u53EF\u4EE5\u52A0\u4E00\u5F20\u73B0\u5728\u7684\u622A\u56FE\u3002</p>
+          <label for="electricity-help-photo">\u73B0\u5728\u7684\u622A\u56FE\uFF08\u9009\u586B\uFF09</label><input id="electricity-help-photo" type="file" accept="${pictureInputTypes}" data-electricity-file="help">
+          ${help.photo ? photo(help.photo) + button("clear-help-photo", "\u79FB\u9664\u622A\u56FE") : ""}
+          <div class="electricity-actions"><button class="button" type="submit" ${busy ? "disabled" : ""}>${busy ? "\u6B63\u5728\u53D1\u9001\u2026" : "\u53D1\u7ED9\u5BB6\u4EBA"}</button>${button("cancel-help", "\u53D6\u6D88")}</div>
+        </form>` : sent ? '<p role="status" class="empty-card">\u5DF2\u8BF7\u5BB6\u4EBA\u770B\u770B\u8FD9\u4E00\u6B65\u3002\u6709\u65B0\u7248\u65F6\uFF0C\u4ECE\u9996\u9875\u6253\u5F00\u5C31\u80FD\u770B\u5230\u3002</p>' : button("open-help", "\u6211\u770B\u5230\u7684\u753B\u9762\u4E0D\u4E00\u6837")}`;
+    return `${pageHeader2(title, preview ? "electricity-cards" : "elder")}<main class="surface electricity-screen electricity-reader stack">${body}${message()}</main>`;
+  }
+  function screen() {
+    if (section === "electricity-cards") return screenList();
+    if (getAccount().guest) return `${pageHeader2("\u67E5\u7535\u8D39\u64CD\u4F5C\u5361", back())}<main class="surface electricity-screen stack">
+      <p class="empty-card">\u8BF7\u767B\u5F55\u79BE\u4F34\uFF0C\u67E5\u770B\u5BB6\u4EBA\u5206\u4EAB\u7684\u64CD\u4F5C\u5361\u3002</p>${loginAction2("\u7528\u90AE\u7BB1\u767B\u5F55", "button", "electricity-cards")}</main>`;
+    if (draft) return preview ? screenReader(draft) : screenEditor();
+    if (data) return screenReader(data);
+    return `${pageHeader2("\u67E5\u7535\u8D39\u64CD\u4F5C\u5361", back())}<main class="surface electricity-screen stack">
+      ${error ? message() + button("reload", "\u91CD\u65B0\u6253\u5F00") : '<p role="status">\u6B63\u5728\u6253\u5F00\u64CD\u4F5C\u5361\u2026</p>'}</main>`;
+  }
+  function homeEntries() {
+    return cards.filter((item) => item.direction === "received" && !item.hidden).map((item) => ({
+      id: item.id,
+      place: "electricity",
+      link: cardLink(item.id),
+      title: item.title,
+      subtitle: item.revision > 1 ? "\u5BB6\u4EBA\u5DF2\u66F4\u65B0" : "\u5BB6\u4EBA\u6559\u6211\u67E5\u7535\u8D39",
+      glyph: "bill",
+      color: "mint"
+    }));
+  }
+  const hiddenEntries = () => cards.filter((item) => item.direction === "received" && item.hidden);
+  const needsHelp = () => cards.filter((item) => item.direction === "sent" && item.needsHelp).length;
+  async function visibility(id, hidden, control) {
+    control.disabled = true;
+    const active = getAccount();
+    try {
+      await api2(path + "/" + id + "/visibility", "PATCH", { hidden });
+      if (getAccount() !== active) return;
+      cards = cards.map((item) => item.id === id ? { ...item, hidden } : item);
+      render2();
+    } catch (failure) {
+      control.disabled = false;
+      throw failure;
+    }
+  }
+  function validateDraft() {
+    const invalid = draft.steps.findIndex((step) => !step.text.trim() || !step.photo || step.x === null);
+    if (!draft.title.trim()) throw new Error("\u8BF7\u586B\u5199\u9996\u9875\u6309\u94AE\u7684\u540D\u5B57\u3002");
+    if (invalid !== -1) {
+      index = invalid;
+      throw new Error(`\u8BF7\u5199\u597D\u7B2C ${index + 1} \u6B65\u7684\u8BF4\u660E\uFF0C\u9009\u4E00\u5F20\u622A\u56FE\u5E76\u6807\u4E0A\u4F4D\u7F6E\u3002`);
+    }
+  }
+  function listen() {
+    const step = (draft ?? data)?.steps[index];
+    if (!step) return;
+    stopAudio();
+    if (!step.audio) {
+      speak2(step.text);
+      return;
+    }
+    const player = audio = new Audio(step.audio);
+    player.play().catch(() => {
+      if (audio === player) speak2(step.text);
+    });
+  }
+  async function record() {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("\u8FD9\u91CC\u6682\u65F6\u65E0\u6CD5\u5F55\u97F3\uFF0C\u53EF\u4EE5\u9009\u62E9\u5DF2\u6709\u5F55\u97F3\u3002");
+    const active = recording = {};
+    const step = draft.steps[index];
+    render2();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (active !== recording) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      active.stream = stream;
+      const mimeType = ["audio/mp4", "audio/webm;codecs=opus", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = active.recorder = new MediaRecorder(stream, { ...mimeType ? { mimeType } : {}, audioBitsPerSecond: 48e3 });
+      const chunks = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) chunks.push(event.data);
+      };
+      recorder.onerror = () => {
+        if (active !== recording) return;
+        cancelRecording();
+        error = "\u8FD9\u6B21\u5F55\u97F3\u5931\u8D25\u4E86\uFF0C\u8BF7\u518D\u5F55\u4E00\u6B21\u3002";
+        render2();
+      };
+      recorder.onstop = async () => {
+        clearTimeout(active.timer);
+        stream.getTracks().forEach((track) => track.stop());
+        if (active !== recording) return;
+        try {
+          const file2 = new Blob(chunks, { type: recorder.mimeType.split(";")[0] });
+          if (!file2.size) throw new Error("\u6CA1\u6709\u5F55\u5230\u58F0\u97F3\uFF0C\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
+          const value = await readAudio(file2);
+          if (active === recording) step.audio = value;
+        } catch (failure) {
+          if (active === recording) error = failure.message;
+        } finally {
+          if (active === recording) {
+            recording = null;
+            render2();
+          }
+        }
+      };
+      recorder.start();
+      active.timer = setTimeout(() => {
+        if (recorder.state === "recording") recorder.stop();
+      }, 18e3);
+      render2();
+    } catch (failure) {
+      if (active !== recording) return;
+      cancelRecording();
+      throw new Error(failure.name === "NotAllowedError" ? "\u8BF7\u5141\u8BB8\u4F7F\u7528\u9EA6\u514B\u98CE\uFF0C\u6216\u8005\u9009\u62E9\u5DF2\u6709\u5F55\u97F3\u3002" : "\u6682\u65F6\u65E0\u6CD5\u5F55\u97F3\uFF0C\u53EF\u4EE5\u9009\u62E9\u5DF2\u6709\u5F55\u97F3\u3002");
+    }
+  }
+  async function action(name, control, event) {
+    if (busy) return;
+    const active = context;
+    error = "";
+    try {
+      switch (name) {
+        case "list-reload":
+          await loadList(true);
+          return;
+        case "reload":
+          void open(section, selected);
+          render2();
+          return;
+        case "listen":
+          listen();
+          return;
+        case "stop-recording":
+          if (recording?.recorder?.state === "recording") {
+            control.disabled = true;
+            recording.recorder.stop();
+            return;
+          }
+          cancelRecording();
+          break;
+        default:
+          if (recording) return;
+          switch (name) {
+            case "record":
+              stopAudio();
+              await record();
+              return;
+            case "preview":
+              validateDraft();
+              preview = true;
+              index = 0;
+              finished = false;
+              break;
+            case "edit":
+              preview = false;
+              index = 0;
+              finished = false;
+              break;
+            case "select":
+              index = Number(control.dataset.index);
+              break;
+            case "add":
+              draft.steps.push(newStep());
+              index = draft.steps.length - 1;
+              break;
+            case "remove":
+              draft.steps.splice(index, 1);
+              index = Math.min(index, draft.steps.length - 1);
+              break;
+            case "remove-audio":
+              draft.steps[index].audio = "";
+              break;
+            case "pin": {
+              const bounds = control.getBoundingClientRect();
+              const center = event.detail === 0;
+              draft.steps[index].x = center ? 0.5 : Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+              draft.steps[index].y = center ? 0.5 : Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+              break;
+            }
+            case "next":
+              if (index + 1 === (draft ?? data).steps.length) finished = true;
+              else index++;
+              help = null;
+              sent = false;
+              break;
+            case "previous":
+              index--;
+              help = null;
+              sent = false;
+              break;
+            case "start-over":
+              index = 0;
+              finished = false;
+              help = null;
+              sent = false;
+              break;
+            case "open-help":
+              help = { photo: "" };
+              break;
+            case "cancel-help":
+              help = null;
+              break;
+            case "clear-help-photo":
+              help.photo = "";
+              break;
+          }
+      }
+      stopAudio();
+      renderStep(name === "open-help" ? "#electricity-help-photo" : ["next", "previous", "start-over", "preview"].includes(name) ? "#electricity-instruction" : "");
+    } catch (failure) {
+      if (active !== context) return;
+      error = failure.message;
+      render2();
+    }
+  }
+  function input(field) {
+    if (!draft) return;
+    if (field.dataset.electricityField) draft[field.dataset.electricityField] = field.value;
+    if (field.dataset.electricityStep) draft.steps[index][field.dataset.electricityStep] = field.value;
+  }
+  function adjustPin(event) {
+    const movement = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+    if (!movement || busy || recording) return;
+    event.preventDefault();
+    const step = draft.steps[index];
+    const move = (coordinate, delta) => Math.max(0, Math.min(1, (coordinate ?? 0.5) + delta * 0.025));
+    step.x = move(step.x, movement[0]);
+    step.y = move(step.y, movement[1]);
+    renderStep('[data-action="electricity-pin"]');
+  }
+  async function file(field) {
+    const selectedFile = field.files[0];
+    if (!selectedFile || busy || recording) return;
+    const active = context;
+    const mode = field.dataset.electricityFile;
+    const target = mode === "help" ? help : draft.steps[index];
+    busy = true;
+    field.disabled = true;
+    try {
+      if (mode === "audio") target.audio = await readAudio(selectedFile);
+      else {
+        target.photo = await readDevicePhoto(selectedFile);
+        if (mode === "photo") target.x = target.y = null;
+      }
+      if (active === context) error = "";
+    } catch (failure) {
+      if (active === context) error = failure.message;
+    } finally {
+      if (active === context) {
+        busy = false;
+        render2();
+      }
+    }
+  }
+  async function submit(mode) {
+    if (busy || recording) return;
+    const active = context;
+    try {
+      if (mode === "publish") {
+        validateDraft();
+        if (!draft.recipient) throw new Error("\u8BF7\u5148\u9009\u62E9\u4E00\u4F4D\u5BB6\u4EBA\u3002");
+      }
+      busy = true;
+      error = "";
+      render2();
+      if (mode === "publish") {
+        await api2(
+          draft.id ? path + "/" + draft.id : path,
+          draft.id ? "PUT" : "POST",
+          { title: draft.title, steps: draft.steps, revision: draft.revision, recipient: draft.recipient }
+        );
+        if (active === context) {
+          loaded = false;
+          location.hash = "#/electricity-cards";
+        }
+      } else {
+        await api2(path + "/" + data.id + "/help", "POST", { stepId: data.steps[index].id, revision: data.revision, photo: help.photo });
+        if (active === context) {
+          help = null;
+          sent = true;
+        }
+      }
+    } catch (failure) {
+      if (active === context) error = failure.message;
+    } finally {
+      if (active === context) {
+        busy = false;
+        render2();
+      }
+    }
+  }
+  return {
+    reset,
+    open,
+    screen,
+    homeEntries,
+    hiddenEntries,
+    needsHelp,
+    visibility,
+    action,
+    input,
+    file,
+    submit,
+    adjustPin,
+    refresh: () => loadList(section === "electricity-cards"),
+    stopMedia: () => {
+      cancelRecording();
+      stopAudio();
+    }
+  };
+}
+
 // app.js
 var app = document.querySelector("#app");
 var cloudSite2 = document.querySelector('meta[name="heban-cloud-site"]')?.content;
@@ -1317,11 +1831,12 @@ var dialog = document.querySelector("#dialog");
 var status = document.querySelector("#status");
 var accountBar = document.querySelector("#account-bar");
 var recordRoutes = ["capture", "records", "record"];
-var routes = ["elder", "family", "chat", "ask", "reminders", "family-chat", "family-reminders", "family-shortcuts", "home-shortcuts", "family-overview", "devices", "device", "family-devices", "device-editor", "guides", "guide", "connections", "shared-device", "assistant-settings", "mine", ...recordRoutes];
-var familyPages = ["elder", "home-shortcuts", "family-shortcuts", "family-overview", "connections", "shared-device"];
+var electricityRoutes = ["electricity-cards", "electricity-editor", "electricity-card"];
+var routes = ["elder", "family", "chat", "ask", "reminders", "family-chat", "family-reminders", "family-shortcuts", "home-shortcuts", "family-overview", "devices", "device", "family-devices", "device-editor", "guides", "guide", "connections", "shared-device", "assistant-settings", "mine", ...recordRoutes, ...electricityRoutes];
+var familyPages = ["elder", "home-shortcuts", "family-shortcuts", "family-overview", "connections", "shared-device", "electricity-cards"];
 var pendingReplies = /* @__PURE__ */ new Map();
 var failedReplies = /* @__PURE__ */ new Map();
-var elderRoutes = ["elder", "home-shortcuts", "chat", "ask", "reminders", "devices", "device", "guides", "guide", "shared-device", "assistant-settings", "mine", ...recordRoutes];
+var elderRoutes = ["elder", "home-shortcuts", "chat", "ask", "reminders", "devices", "device", "guides", "guide", "shared-device", "assistant-settings", "mine", "electricity-card", ...recordRoutes];
 var voices = window.SpeechRecognition || window.webkitSpeechRecognition;
 var longDate = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" });
 var repeats = { never: "\u53EA\u63D0\u9192\u4E00\u6B21", daily: "\u6BCF\u5929\u63D0\u9192", weekly: "\u6BCF\u5468\u63D0\u9192" };
@@ -1353,6 +1868,7 @@ var symbol = {
 var icon = (name, size = 24) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${symbol[name]}</svg>`;
 var escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 var records = createRecords({ paint: render, pageHeader, escapeHtml, icon, showDialog, closeDialog: () => dialog.close(), notify, isGuest: () => account?.guest });
+var electricity = createElectricityCards({ api, escapeHtml, pageHeader, loginAction, render, speak, stopSpeech, account: () => account, family: () => family });
 var state = newState();
 var route = readRoute();
 var returnFocus = null;
@@ -1518,21 +2034,23 @@ function visibleDefaults(added) {
 function homeShortcutsScreen() {
   const added = addedHomeShortcuts();
   const defaults = visibleDefaults(added).map((key) => ({ ...shortcutOptions[key], key, place: "default" }));
-  const rows = [...defaults, ...added];
+  const rows = [...defaults, ...added, ...electricity.homeEntries()];
+  const hiddenCards = electricity.hiddenEntries();
   const hidden = state.hiddenShortcuts.filter((key) => !added.some((item) => item.key === key));
   return `${pageHeader("\u7BA1\u7406\u5E38\u7528\u529F\u80FD", "elder")}<main class="surface shortcut-screen">
     <p class="device-help">\u5220\u9664\u540E\uFF0C\u8BE5\u5165\u53E3\u4F1A\u4ECE\u9996\u9875\u79FB\u9664\u3002\u539F\u6765\u7684\u63D0\u9192\u3001\u7167\u7247\u548C\u4F7F\u7528\u8BB0\u5F55\u4ECD\u53EF\u67E5\u770B\u3002</p>
     <section class="shortcut-items"><h2>\u9996\u9875\u4E0A\u7684\u529F\u80FD</h2>
       ${rows.length ? `<ul class="record-list">${rows.map((item) => `<li class="shortcut-row"><div><strong>${escapeHtml(item.title)}</strong>${item.subtitle ? `<span>${escapeHtml(item.subtitle)}</span>` : ""}</div>
-        <button class="button quiet" type="button" data-action="remove-shortcut" data-id="${escapeHtml(item.id ?? "")}" data-place="${item.place}" data-key="${escapeHtml(item.key ?? "")}" aria-label="\u5220\u9664${escapeHtml(item.title)}\u5165\u53E3">\u5220\u9664</button></li>`).join("")}</ul>` : '<p class="empty-card">\u9996\u9875\u6682\u65F6\u6CA1\u6709\u5E38\u7528\u5165\u53E3\u3002</p>'}</section>
+        <button class="button quiet" type="button" data-action="${item.place === "electricity" ? "hide-electricity" : "remove-shortcut"}" data-id="${escapeHtml(item.id ?? "")}" data-place="${item.place}" data-key="${escapeHtml(item.key ?? "")}" aria-label="\u5220\u9664${escapeHtml(item.title)}\u5165\u53E3">\u5220\u9664</button></li>`).join("")}</ul>` : '<p class="empty-card">\u9996\u9875\u6682\u65F6\u6CA1\u6709\u5E38\u7528\u5165\u53E3\u3002</p>'}</section>
     ${hidden.length ? `<section class="shortcut-items"><h2>\u53EF\u6062\u590D\u7684\u9ED8\u8BA4\u5165\u53E3</h2><ul class="record-list">${hidden.map((key) => `<li class="shortcut-row"><strong>${escapeHtml(shortcutOptions[key].title)}</strong><button class="button quiet" type="button" data-action="restore-shortcut" data-key="${key}">\u6062\u590D</button></li>`).join("")}</ul></section>` : ""}
+    ${hiddenCards.length ? `<section class="shortcut-items"><h2>\u53EF\u6062\u590D\u7684\u64CD\u4F5C\u5361</h2><ul class="record-list">${hiddenCards.map((item) => `<li class="shortcut-row"><strong>${escapeHtml(item.title)}</strong><button class="button quiet" type="button" data-action="restore-electricity" data-id="${escapeHtml(item.id)}">\u6062\u590D</button></li>`).join("")}</ul></section>` : ""}
   </main>`;
 }
 function elderHome() {
   const next = reminderOrder(state.reminders, "elder").find((item) => !item.done && item.at > Date.now());
   const added = addedHomeShortcuts();
   const defaults = visibleDefaults(added);
-  const featured = [...quickCards.filter((item) => defaults.includes(item.key)), ...added];
+  const featured = [...electricity.homeEntries(), ...quickCards.filter((item) => defaults.includes(item.key)), ...added];
   return `${homeHeader("elder")}<main class="surface home-screen">
     <div class="home-heading"><h1 id="screen-title" tabindex="-1">\u751F\u6D3B\u5E2E\u624B</h1><p class="date">${longDate.format(/* @__PURE__ */ new Date())}</p></div>
     <section class="feature-banner home-capture" aria-labelledby="capture-home-title">
@@ -1551,7 +2069,7 @@ function elderHome() {
 }
 function bottomNav() {
   const tabs = [
-    { link: "elder", label: "\u9996\u9875", glyph: "home", pages: ["elder", "home-shortcuts"] },
+    { link: "elder", label: "\u9996\u9875", glyph: "home", pages: ["elder", "home-shortcuts", "electricity-card"] },
     { link: "ask", label: "\u52A9\u624B", glyph: "chat", pages: ["ask", "chat", "assistant-settings", "capture"] },
     { link: "guides", label: "\u8DDF\u7740\u505A", glyph: "bill", pages: ["guides", "guide", "devices", "device"] },
     { link: "mine", label: "\u6211\u7684", glyph: "people" }
@@ -1588,6 +2106,7 @@ function familyHome() {
       <span><strong>${demoLastSeen ? "\u672C\u673A\u63D0\u9192\u6F14\u793A" : "\u672C\u673A\u5173\u6000\u8BBE\u7F6E"}</strong><span>${activity}</span></span>${icon("right", 22)}</button>
     <div class="contact-card"><span class="tile-icon apricot">${icon("phone", 30)}</span><span class="tile-text"><strong>\u7ED9${escapeHtml(state.contactName)}\u6253\u7535\u8BDD</strong><span>${callReminder ? `${formatWhen(callReminder.at)} \u6709\u8054\u7CFB\u63D0\u9192` : "\u9009\u4E2A\u65F6\u95F4\uFF0C\u6253\u4E2A\u7535\u8BDD"}</span></span>${phoneAction}</div>
     <div class="feature-grid family-tools">
+      ${featureCard({ link: "electricity-cards", title: "\u67E5\u7535\u8D39\u64CD\u4F5C\u5361", subtitle: electricity.needsHelp() ? "\u6709\u64CD\u4F5C\u5361\u9700\u8981\u4FEE\u6539" : "\u5708\u51FA\u4F4D\u7F6E\uFF0C\u5F55\u4E00\u53E5\u8BDD", glyph: "bill", color: "mint" })}
       ${featureCard({ link: "connections", title: "\u5BB6\u5EAD\u8FDE\u63A5", subtitle: "\u8FDE\u63A5\u5BB6\u4EBA\u548C\u67E5\u770B\u5206\u4EAB", glyph: "people", color: "blue" })}
       ${featureCard({ link: "family-overview", title: "\u957F\u8F88\u804A\u5929\u548C\u8FD1\u51B5", subtitle: "\u67E5\u770B\u957F\u8F88\u540C\u610F\u5206\u4EAB\u7684\u5185\u5BB9", glyph: "heart", color: "peach" })}
       ${featureCard({ link: "family-reminders", title: "\u8054\u7CFB\u63D0\u9192", subtitle: "\u8BB0\u4E0B\u6253\u7535\u8BDD\u7684\u65F6\u95F4", glyph: "calendar", color: "peach" })}
@@ -1608,6 +2127,7 @@ function familyShortcutsScreen() {
   return `${head}<main class="surface shortcut-screen">
     <form class="shortcut-form" data-form="family-shortcut">
       <h2>\u6DFB\u52A0\u4E00\u4E2A\u529F\u80FD</h2>
+      <a class="section-link" href="#/electricity-cards">\u7ED9\u5BB6\u4EBA\u5236\u4F5C\u67E5\u7535\u8D39\u64CD\u4F5C\u5361</a>
       <label for="shortcut-recipient">\u52A0\u7ED9\u8C01\uFF1F</label>
       <select id="shortcut-recipient" name="recipient" required>${links.length > 1 ? '<option value="">\u8BF7\u9009\u62E9\u4E00\u4F4D\u5BB6\u4EBA</option>' : ""}
         ${links.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}\u7684\u9996\u9875</option>`).join("")}
@@ -1625,7 +2145,7 @@ function familyShortcutsScreen() {
       <div class="shortcut-custom" data-shortcut-custom hidden>
         <label for="shortcut-url">\u7F51\u9875\u5730\u5740</label><input id="shortcut-url" name="target" type="url" inputmode="url" maxlength="500" placeholder="https://" disabled>
       </div>
-      <p class="form-error" role="alert">${escapeHtml(familyError)}</p>
+  <p class="form-error" role="alert">${escapeHtml(familyError)}</p>
       <button class="button" type="submit">${icon("plus", 21)}\u6DFB\u52A0\u5230\u957F\u8F88\u7AEF</button>
     </form>
     <section class="shortcut-items"><h2>\u5DF2\u6DFB\u52A0</h2>
@@ -1661,8 +2181,8 @@ async function submitShortcut(form, data) {
     return;
   }
   const active = account;
-  const button = form.querySelector("[type=submit]");
-  button.disabled = true;
+  const button2 = form.querySelector("[type=submit]");
+  button2.disabled = true;
   try {
     const result = await api("/api/family/shortcuts", "POST", { recipient, ...shortcut });
     if (account !== active) return;
@@ -1672,11 +2192,11 @@ async function submitShortcut(form, data) {
   } catch (failure) {
     error.textContent = failure.message;
   } finally {
-    button.disabled = false;
+    button2.disabled = false;
   }
 }
-async function removeShortcut(button) {
-  const { id, place, key } = button.dataset;
+async function removeShortcut(button2) {
+  const { id, place, key } = button2.dataset;
   const hideDefault = route === "home-shortcuts" && defaultShortcuts.includes(key);
   function updateHiddenDefaults() {
     if (hideDefault && !state.hiddenShortcuts.includes(key)) state.hiddenShortcuts.push(key);
@@ -1693,7 +2213,7 @@ async function removeShortcut(button) {
     return;
   }
   const active = account;
-  button.disabled = true;
+  button2.disabled = true;
   try {
     const result = await api(`/api/family/shortcuts/${encodeURIComponent(id)}`, "DELETE");
     if (account !== active) return;
@@ -1707,7 +2227,7 @@ async function removeShortcut(button) {
   } catch (error) {
     notify(error.message);
   } finally {
-    button.disabled = false;
+    button2.disabled = false;
   }
 }
 var chatConfig = {
@@ -1981,16 +2501,16 @@ function guideScreen() {
     ${footer}
   </main>`;
 }
-function guideInteraction(action, button) {
+function guideInteraction(action, button2) {
   const guide = currentGuide();
   if (!guide) return;
   let run = readGuideRun(guide, state.guideRuns[guide.id]);
   switch (action) {
     case "guide-start":
-      if (run.screen === "pick" && guide.starts.includes(button.dataset.step)) run = setGuideScreen(guide, run, button.dataset.step);
+      if (run.screen === "pick" && guide.starts.includes(button2.dataset.step)) run = setGuideScreen(guide, run, button2.dataset.step);
       break;
     case "guide-answer": {
-      const option = guide.steps[run.screen]?.options[Number(button.dataset.index)];
+      const option = guide.steps[run.screen]?.options[Number(button2.dataset.index)];
       if (option) run = setGuideScreen(guide, run, option.to, option.countFailure);
       break;
     }
@@ -2088,14 +2608,14 @@ async function saveFamilyPermission(form, data) {
   const person = family?.links.find((item) => item.id === form.dataset.id);
   if (!person) return;
   const active = account;
-  const button = form.querySelector("[type=submit]");
+  const button2 = form.querySelector("[type=submit]");
   const activity = data.has("activity");
   const chats = data.has("chats");
   state.familyVisibility = state.familyVisibility.filter((item) => item.id !== person.id);
   if (activity || chats) state.familyVisibility.push({ id: person.id, linkedAt: person.linkedAt, activity, chats });
   if (activity && document.visibilityState === "visible") state.lastSeen = Date.now();
   const notified = save();
-  button.disabled = true;
+  button2.disabled = true;
   try {
     if (!notified || !await flushCloud()) throw new Error("\u8BBE\u7F6E\u8FD8\u6CA1\u540C\u6B65\uFF0C\u8BF7\u8FDE\u63A5\u7F51\u7EDC\u540E\u91CD\u8BD5\u3002");
     if (account !== active) return;
@@ -2105,7 +2625,7 @@ async function saveFamilyPermission(form, data) {
   } catch (error) {
     form.querySelector(".form-error").textContent = error.message;
   } finally {
-    button.disabled = false;
+    button2.disabled = false;
   }
 }
 var familyLoad;
@@ -2169,8 +2689,8 @@ async function openShareItem(kind, id) {
     <button class="button wide" type="submit">\u786E\u8BA4\u5206\u4EAB</button></form>`);
 }
 async function familyForm(form, data) {
-  const button = form.querySelector('[type="submit"]');
-  button.disabled = true;
+  const button2 = form.querySelector('[type="submit"]');
+  button2.disabled = true;
   try {
     const joining = form.dataset.form === "join-family";
     if (!joining && !await flushCloud()) throw new Error("\u8FD9\u6761\u5185\u5BB9\u8FD8\u6CA1\u6709\u540C\u6B65\uFF0C\u8BF7\u5148\u5B8C\u6210\u4E91\u7AEF\u4FDD\u5B58\u3002");
@@ -2181,10 +2701,10 @@ async function familyForm(form, data) {
   } catch (error) {
     actionError(error);
   } finally {
-    button.disabled = false;
+    button2.disabled = false;
   }
 }
-async function connectionAction(action, id, button) {
+async function connectionAction(action, id, button2) {
   if (action === "reload-family") {
     await loadFamily();
     return;
@@ -2199,7 +2719,7 @@ async function connectionAction(action, id, button) {
       <div class="dialog-actions"><button type="button" class="button quiet" data-action="close">\u53D6\u6D88</button><button type="button" class="button danger" data-action="${removing ? "confirm-remove-family" : "confirm-recall-share"}" data-id="${id}">\u786E\u8BA4</button></div>`);
     return;
   }
-  button.disabled = true;
+  button2.disabled = true;
   try {
     if (action === "invite-family") {
       invite = (await api("/api/family/invite", "POST")).code;
@@ -2222,7 +2742,7 @@ async function connectionAction(action, id, button) {
   } catch (error) {
     actionError(error);
   } finally {
-    button.disabled = false;
+    button2.disabled = false;
   }
 }
 function cloudEntry(message = "", values = {}) {
@@ -2250,6 +2770,7 @@ function cloudEntry(message = "", values = {}) {
 async function startCloud(mode) {
   const switching = Boolean(authMode && mode !== authMode);
   const result = await connectCloud(updateCloudStatus, mode);
+  electricity.reset();
   account = result.user;
   authMode = mode;
   account = mode === "legacy" ? { ...account, legacy: true } : account;
@@ -2298,7 +2819,7 @@ async function boot() {
 async function flushBeforeSwitch() {
   if (unsyncedCloud() && !await flushCloud() && cloudStatus !== "auth") throw new Error("\u8FD8\u6709\u5185\u5BB9\u6CA1\u6709\u4FDD\u5B58\uFF0C\u8BF7\u5148\u91CD\u8BD5\u4FDD\u5B58\u3002");
 }
-async function chooseAccess(action, button) {
+async function chooseAccess(action, button2) {
   if (authBusy) return;
   if (action === "show-login" || action === "login-create" || action === "login-existing") {
     const values = { name: document.querySelector("#login-name")?.value, email: document.querySelector("#login-email")?.value };
@@ -2317,7 +2838,7 @@ async function chooseAccess(action, button) {
     return;
   }
   authBusy = true;
-  button.disabled = true;
+  button2.disabled = true;
   try {
     if (action === "continue-guest") {
       await flushBeforeSwitch();
@@ -2325,6 +2846,7 @@ async function chooseAccess(action, button) {
     } else if (action === "account-signout") {
       await flushBeforeSwitch();
       if (authMode === "account") await api("/api/auth/logout", "POST");
+      electricity.reset();
       accessPreference("");
       account = null;
       authMode = "";
@@ -2337,15 +2859,15 @@ async function chooseAccess(action, button) {
     notify(error.message);
   } finally {
     authBusy = false;
-    button.disabled = false;
+    button2.disabled = false;
   }
 }
 async function submitEmailLogin(form, data) {
   if (authBusy) return;
   authBusy = true;
-  const button = form.querySelector('button[type="submit"]');
+  const button2 = form.querySelector('button[type="submit"]');
   const errorField = form.querySelector(".form-error");
-  button.disabled = true;
+  button2.disabled = true;
   errorField.textContent = "";
   try {
     await flushBeforeSwitch();
@@ -2355,7 +2877,7 @@ async function submitEmailLogin(form, data) {
     errorField.textContent = error.message;
   } finally {
     authBusy = false;
-    button.disabled = false;
+    button2.disabled = false;
   }
 }
 function render() {
@@ -2385,7 +2907,8 @@ function render() {
     "assistant-settings": assistantSettings,
     mine: mineScreen
   };
-  app.innerHTML = screens[route]() + bottomNav();
+  const screen = electricityRoutes.includes(route) ? electricity.screen : screens[route];
+  app.innerHTML = screen() + bottomNav();
 }
 function showDialog(title, body) {
   if (!dialog.open) returnFocus = document.activeElement;
@@ -2504,7 +3027,7 @@ async function sendMessage(text, retry = false) {
   }
   if (state.listen) speak(failure?.message || reply, state.speechRate, false);
 }
-function startVoice(button) {
+function startVoice(button2) {
   if (!voices) {
     notify("\u8FD9\u53F0\u6D4F\u89C8\u5668\u6682\u4E0D\u652F\u6301\u8BED\u97F3\u8F93\u5165\uFF0C\u60A8\u53EF\u4EE5\u6253\u5B57\u3002");
     return;
@@ -2513,7 +3036,7 @@ function startVoice(button) {
     recognition.stop();
     return;
   }
-  const target = document.getElementById(button.dataset.target || "message-input");
+  const target = document.getElementById(button2.dataset.target || "message-input");
   if (!target) return;
   const speech = new voices();
   speech.lang = "zh-CN";
@@ -2523,15 +3046,15 @@ function startVoice(button) {
   };
   speech.onerror = () => notify("\u6CA1\u6709\u542C\u6E05\uFF0C\u60A8\u53EF\u4EE5\u91CD\u8BD5\u6216\u6253\u5B57\u3002");
   speech.onend = () => {
-    button.classList.remove("recording");
-    button.setAttribute("aria-pressed", "false");
+    button2.classList.remove("recording");
+    button2.setAttribute("aria-pressed", "false");
     recognition = void 0;
   };
   try {
     speech.start();
     recognition = speech;
-    button.classList.add("recording");
-    button.setAttribute("aria-pressed", "true");
+    button2.classList.add("recording");
+    button2.setAttribute("aria-pressed", "true");
     notify("\u6B63\u5728\u542C\uFF0C\u8BF7\u8BF4\u8BDD\u3002");
   } catch {
     notify("\u6682\u65F6\u65E0\u6CD5\u5F00\u542F\u9EA6\u514B\u98CE\uFF0C\u60A8\u53EF\u4EE5\u6253\u5B57\u3002");
@@ -2565,24 +3088,32 @@ function checkReminders() {
   if (state.listen) speak(`\u63D0\u9192\u65F6\u95F4\u5230\u4E86\uFF1A${due.title}`, state.speechRate, false);
 }
 document.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-action]");
-  if (!button) return;
-  const { action, id, text } = button.dataset;
+  const button2 = event.target.closest("[data-action]");
+  if (!button2) return;
+  const { action, id, text } = button2.dataset;
   if (["show-login", "login-create", "login-existing", "continue-guest", "close-login", "account-signout"].includes(action)) {
-    void chooseAccess(action, button);
+    void chooseAccess(action, button2);
     return;
   }
   if (!account) return;
+  if (action.startsWith("electricity-")) {
+    void electricity.action(action.slice("electricity-".length), button2, event);
+    return;
+  }
+  if (action === "hide-electricity" || action === "restore-electricity") {
+    void electricity.visibility(id, action === "hide-electricity", button2).catch(actionError);
+    return;
+  }
   if (recordRoutes.includes(route) && action.startsWith("capture-")) {
-    void records.action(action, button);
+    void records.action(action, button2);
     return;
   }
   if (action === "remove-shortcut") {
-    void removeShortcut(button);
+    void removeShortcut(button2);
     return;
   }
   if (action === "restore-shortcut") {
-    state.hiddenShortcuts = state.hiddenShortcuts.filter((key) => key !== button.dataset.key);
+    state.hiddenShortcuts = state.hiddenShortcuts.filter((key) => key !== button2.dataset.key);
     refresh("\u5DF2\u6062\u590D\u5230\u9996\u9875\u3002");
     return;
   }
@@ -2608,11 +3139,11 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (["invite-family", "join-family", "copy-invite", "reload-family", "remove-family", "recall-share", "confirm-remove-family", "confirm-recall-share"].includes(action)) {
-    void connectionAction(action, id, button);
+    void connectionAction(action, id, button2);
     return;
   }
   if (route === "guide" && action.startsWith("guide-")) {
-    guideInteraction(action, button);
+    guideInteraction(action, button2);
     return;
   }
   const item = state.reminders.find((reminder) => reminder.id === id);
@@ -2622,7 +3153,7 @@ document.addEventListener("click", (event) => {
       dialog.close();
       break;
     case "preview-persona": {
-      const form = button.form;
+      const form = button2.form;
       speak(personas[form.elements.persona.value].preview, form.elements["speech-rate"].value);
       break;
     }
@@ -2640,7 +3171,7 @@ document.addEventListener("click", (event) => {
     }
     case "listen": {
       state.listen = !state.listen;
-      button.setAttribute("aria-pressed", String(state.listen));
+      button2.setAttribute("aria-pressed", String(state.listen));
       save();
       if (state.listen) speak("\u5DF2\u5F00\u542F\u542C\u56DE\u590D\u3002");
       else stopSpeech();
@@ -2653,7 +3184,7 @@ document.addEventListener("click", (event) => {
       const device = selectedDevice();
       const step = device?.steps[deviceStep];
       if (!step) break;
-      if (button.dataset.key === step.key) moveLesson(deviceStep + 1);
+      if (button2.dataset.key === step.key) moveLesson(deviceStep + 1);
       else document.querySelector("#device-feedback").textContent = `\u518D\u627E\u627E\u300C${device.controls.find(([key]) => key === step.key)[1]}\u300D\u3002`;
       break;
     }
@@ -2667,40 +3198,40 @@ document.addEventListener("click", (event) => {
       moveLesson(0);
       break;
     case "device-pin": {
-      const bounds = button.querySelector("img").getBoundingClientRect();
+      const bounds = button2.querySelector("img").getBoundingClientRect();
       const clampCoordinate = (value) => Math.max(0, Math.min(1, value));
       const pin = event.detail && bounds.width && bounds.height ? { x: clampCoordinate((event.clientX - bounds.left) / bounds.width), y: clampCoordinate((event.clientY - bounds.top) / bounds.height) } : deviceEditor.pin ?? { x: 0.5, y: 0.5 };
-      updatePin(button.form, pin);
+      updatePin(button2.form, pin);
       guideError("");
       break;
     }
     case "device-add-step": {
-      if (addDeviceStep(button.form)) button.form.querySelector(".photo-target").focus();
+      if (addDeviceStep(button2.form)) button2.form.querySelector(".photo-target").focus();
       break;
     }
     case "device-edit-step": {
-      const index = Number(button.dataset.index);
+      const index = Number(button2.dataset.index);
       const step = deviceEditor.steps[index];
       deviceEditor.stepIndex = index;
-      button.form.elements.step.value = step.text;
-      updatePin(button.form, step.x === null ? null : step);
-      button.form.querySelector('[data-action="device-add-step"]').textContent = "\u66F4\u65B0\u8FD9\u4E00\u6B65";
+      button2.form.elements.step.value = step.text;
+      updatePin(button2.form, step.x === null ? null : step);
+      button2.form.querySelector('[data-action="device-add-step"]').textContent = "\u66F4\u65B0\u8FD9\u4E00\u6B65";
       guideError("");
-      button.form.querySelector(".photo-target").focus();
+      button2.form.querySelector(".photo-target").focus();
       break;
     }
     case "device-remove-step": {
-      const index = Number(button.dataset.index);
+      const index = Number(button2.dataset.index);
       deviceEditor.steps.splice(index, 1);
       if (deviceEditor.stepIndex === index) {
         deviceEditor.stepIndex = null;
-        button.form.elements.step.value = "";
-        updatePin(button.form, null);
-        button.form.querySelector('[data-action="device-add-step"]').textContent = "\u6DFB\u52A0\u8FD9\u4E00\u6B65";
+        button2.form.elements.step.value = "";
+        updatePin(button2.form, null);
+        button2.form.querySelector('[data-action="device-add-step"]').textContent = "\u6DFB\u52A0\u8FD9\u4E00\u6B65";
       } else if (deviceEditor.stepIndex !== null && deviceEditor.stepIndex > index) deviceEditor.stepIndex -= 1;
-      button.form.querySelector("#guide-steps").innerHTML = editorStepRows();
+      button2.form.querySelector("#guide-steps").innerHTML = editorStepRows();
       guideError("");
-      button.form.querySelector('[data-action="device-add-step"]').focus();
+      button2.form.querySelector('[data-action="device-add-step"]').focus();
       break;
     }
     case "device-delete": {
@@ -2722,7 +3253,7 @@ document.addEventListener("click", (event) => {
       break;
     }
     case "voice":
-      startVoice(button);
+      startVoice(button2);
       break;
     case "example":
       sendMessage(text);
@@ -2747,7 +3278,7 @@ document.addEventListener("click", (event) => {
       if (item) draftReminder(owner, item);
       break;
     case "parse": {
-      const form = button.form;
+      const form = button2.form;
       setSentence(form.elements.sentence.value, form);
       break;
     }
@@ -2779,6 +3310,12 @@ document.addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(form);
   switch (form.dataset.form) {
+    case "electricity-publish":
+      void electricity.submit("publish");
+      break;
+    case "electricity-help":
+      void electricity.submit("help");
+      break;
     case "email-login":
       void submitEmailLogin(form, data);
       break;
@@ -2843,8 +3380,19 @@ document.addEventListener("submit", (event) => {
     }
   }
 });
+document.addEventListener("input", (event) => {
+  if (event.target.matches("[data-electricity-field], [data-electricity-step]")) electricity.input(event.target);
+});
 document.addEventListener("change", async (event) => {
   const field = event.target;
+  if (field.matches("select[data-electricity-field]")) {
+    electricity.input(field);
+    return;
+  }
+  if (field.matches("[data-electricity-file]")) {
+    await electricity.file(field);
+    return;
+  }
   if (field.id === "shortcut-kind") {
     const custom = field.form.querySelector("[data-shortcut-custom]");
     custom.hidden = field.value !== "website";
@@ -2894,6 +3442,10 @@ document.addEventListener("change", async (event) => {
   }
 });
 document.addEventListener("keydown", (event) => {
+  if (event.target.matches('[data-action="electricity-pin"]')) {
+    electricity.adjustPin(event);
+    return;
+  }
   if (!event.target.matches('.photo-target[data-action="device-pin"]')) return;
   const offsets = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
   if (!offsets[event.key]) return;
@@ -2927,8 +3479,15 @@ function enterScreen(focus = false) {
     save();
   }
   noteActivity();
+  void electricity.open(route, id);
   render();
   if (familyPages.includes(route)) void loadFamily();
+  if (route === "electricity-editor" && !id && !family) {
+    const active = account;
+    void loadFamily().then(() => {
+      if (account === active && route === "electricity-editor" && !routeDeviceId()) render();
+    });
+  }
   if (route === "family-overview") void loadOverview();
   else overview = null;
   if (focus) {
@@ -2953,11 +3512,13 @@ document.addEventListener("visibilitychange", () => {
   noteActivity();
   if (account && document.visibilityState === "visible") {
     if (route === "elder") void loadFamily();
+    if (["elder", "family", "home-shortcuts", "electricity-cards"].includes(route)) void electricity.refresh();
     if (route === "family-overview") void loadOverview();
   }
   if (account) checkReminders();
 });
 window.addEventListener("pagehide", records.stopCamera);
+window.addEventListener("pagehide", electricity.stopMedia);
 window.addEventListener("pageshow", (event) => {
   if (event.persisted && route === "capture") void records.action("capture-reset");
 });

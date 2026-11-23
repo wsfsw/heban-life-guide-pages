@@ -498,3 +498,18 @@ body:has(.app-nav) .toast { bottom: calc(var(--nav-height) + 10px); }
 .overview-conversation li { padding: 9px 0; overflow-wrap: anywhere; }
 .overview-conversation li p { margin: 6px 0 0; white-space: pre-wrap; }
 .overview-conversation time { margin-inline-start: 9px; color: var(--muted); font-size: 0.9rem; }
+
+.electricity-screen { padding-top: 12px; }
+.electricity-screen > .button { justify-self: start; }
+.electricity-step-tabs, .electricity-actions, .electricity-reader-nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.electricity-step-tabs { margin: 8px 0; }
+.electricity-help { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.electricity-help h3, .electricity-help p, .electricity-progress { margin: 0; }
+.electricity-progress { font-weight: 700; color: var(--muted); }
+.electricity-screen h2 { margin: 0; overflow-wrap: anywhere; }
+.electricity-screen input[type="file"] { min-width: 0; width: 100%; max-width: 100%; }
+.electricity-screen .form-error:empty { display: none; }
+.electricity-notice { border-left: 4px solid var(--accent, #315855); margin: 0; }
+.electricity-photo .device-photo-image { max-height: 58vh; width: auto; max-width: 100%; }
+.electricity-reader-nav > .button { flex: 1 1 110px; }
+.electricity-reader .photo-board { margin: 0; }
