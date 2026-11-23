@@ -10,8 +10,8 @@ export const phoneLessons = {
 };
 
 export const phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
-const androidTrial = 'https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.2';
-const launchAndroid = (path) => `intent://phone/${path}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
+const androidDownload = 'https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.3';
+const launchAndroid = (path) => `intent://phone/${path}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidDownload)};end`;
 
 function quotedTapTarget(instruction) {
   if (/(?:不要|不用|别|不必|禁止)[^，。；]{0,6}(?:点|按)/.test(instruction)) return '';
@@ -27,7 +27,8 @@ export function androidGuidePath(guide) {
     title: guide.title || (guide.topic === 'wifi' ? '连接无线网' : '手机操作引导'),
     app,
     steps: guide.steps.slice(0, 5).map((text, i) => ({ text, target: guide.targets?.[i] || quotedTapTarget(text),
-      ...(guide.apps?.[i] ? { app: guide.apps[i] } : {}) })),
+      ...(guide.apps?.[i] ? { app: guide.apps[i] } : {}),
+      ...(guide.after?.[i] ? { after: guide.after[i] } : {}) })),
   };
   return 'steps?plan=' + encodeURIComponent(JSON.stringify(plan));
 }
@@ -62,6 +63,7 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
   let narration;
   let lines = [];
   let lineIndex = 0;
+  const completed = new Set();
   const line = caption.querySelector('span');
 
   function showLine(index) {
@@ -84,18 +86,22 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
   const button = (name, label) => `<button type="button" class="text-button" data-action="phone-${name}">${label}</button>`;
   const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
 
-  function androidLinks(path) {
-    if (!/Android/i.test(navigator.userAgent)) return `<a class="text-button" href="${androidTrial}">在安卓手机安装屏幕引导</a>`;
-    const href = esc(launchAndroid(path));
+  function androidLinks(path, ref) {
+    if (!/Android/i.test(navigator.userAgent)) return `<a class="text-button" href="${androidDownload}">下载禾伴安卓版</a>`;
+    const fullPath = path + (path.includes('?') ? '&' : '?') + 'ref=' + encodeURIComponent(ref);
+    const inHeban = /HebanAndroid\//.test(navigator.userAgent);
+    const href = esc(inHeban ? `heban-guide://phone/${fullPath}` : launchAndroid(fullPath));
     return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">开启跨应用引导</a>
-      <a class="text-button" href="${androidTrial}">下载安装包</a></div>`;
+      ${inHeban ? '' : `<a class="text-button" href="${androidDownload}">下载禾伴安卓版</a>`}</div>`;
   }
 
-  function directLink(question) {
-    return phoneTopic(question) === 'font' ? androidLinks('font') : '';
+  function directLink(question, ref) {
+    return phoneTopic(question) === 'font' ? androidLinks('font', ref) : '';
   }
 
   function controls(id) {
+    if (completed.has(id)) return `<div class="phone-guide-controls"><span role="status">引导已完成</span>
+      <button type="button" class="text-button" data-action="open-phone-guide" data-id="${esc(id)}">再做一次</button></div>`;
     if (!visible || current?.id !== id) return '';
     const { platform, pending, error, steps, index, clarification, muted } = current;
     let content;
@@ -109,7 +115,7 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
       + button('next', index + 1 < steps.length ? '下一步' : '做完了');
     const path = platform === 'android' ? androidGuidePath(current) : '';
     return `<div class="phone-guide-controls" aria-label="字幕和进度">${content}
-      ${platform && !pending ? button('change', '换手机') : ''}${button('end', '结束')}${path ? androidLinks(path) : ''}</div>`;
+      ${platform && !pending ? button('change', '换手机') : ''}${button('end', '结束')}${path ? androidLinks(path, id) : ''}</div>`;
   }
 
   function playNative(start) {
@@ -162,7 +168,7 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
 
   async function load(platform) {
     const active = current = { ...current, platform, steps: [], index: 0, pending: true, error: '', clarification: '',
-      topic: '', title: '', androidApp: '', targets: [], apps: [] };
+      topic: '', title: '', androidApp: '', targets: [], apps: [], after: [] };
     const topic = phoneTopic(active.question);
     if (topic) {
       Object.assign(active, { steps: phoneLessons[platform][topic], topic, pending: false });
@@ -182,8 +188,9 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
   }
 
   function open(question, history) {
+    const restart = completed.delete(question.id);
     visible = true;
-    if (current?.id === question.id) { step(); return; }
+    if (current?.id === question.id && !restart) { step(); return; }
     current = { id: question.id, question: question.text, history, platform: '', steps: [], index: 0, muted: false };
     const ua = navigator.userAgent;
     const platform = /iPhone|iPad/.test(ua) ? 'iphone' : /Android/i.test(ua) ? 'android' : '';
@@ -227,5 +234,17 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
     stop();
     showLine(0);
   }
-  return { open, action, controls, directLink, close, reset() { close(); current = null; } };
+  function applyNativeResult(result) {
+    const { ref, status } = result ?? {};
+    if (typeof ref !== 'string' || !['running', 'completed', 'ended'].includes(status)) return;
+    const changed = status === 'completed' ? !completed.has(ref) : completed.has(ref);
+    if (status === 'completed') completed.add(ref);
+    else completed.delete(ref);
+    const active = current?.id === ref && visible;
+    if (active) close();
+    if (active || changed) render();
+  }
+
+  return { open, action, controls, directLink, close, applyNativeResult,
+    reset() { close(); current = null; } };
 }

@@ -1836,8 +1836,8 @@ var phoneLessons = {
   }
 };
 var phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
-var androidTrial = "https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.2";
-var launchAndroid = (path2) => `intent://phone/${path2}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
+var androidDownload = "https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.3";
+var launchAndroid = (path2) => `intent://phone/${path2}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidDownload)};end`;
 function quotedTapTarget(instruction) {
   if (/(?:不要|不用|别|不必|禁止)[^，。；]{0,6}(?:点|按)/.test(instruction)) return "";
   const taps = [...instruction.matchAll(/(?:点击|轻点|点按|点)(?:[击看开进]|(?:屏幕|页面)?(?:上方|下方|顶部|底部|左上角|右上角|左下角|右下角|左侧|右侧|中间)的?)?\s*[“「]([^”」]{1,28})[”」]/g)];
@@ -1853,7 +1853,8 @@ function androidGuidePath(guide) {
     steps: guide.steps.slice(0, 5).map((text, i) => ({
       text,
       target: guide.targets?.[i] || quotedTapTarget(text),
-      ...guide.apps?.[i] ? { app: guide.apps[i] } : {}
+      ...guide.apps?.[i] ? { app: guide.apps[i] } : {},
+      ...guide.after?.[i] ? { after: guide.after[i] } : {}
     }))
   };
   return "steps?plan=" + encodeURIComponent(JSON.stringify(plan));
@@ -1885,6 +1886,7 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
   let narration;
   let lines = [];
   let lineIndex = 0;
+  const completed = /* @__PURE__ */ new Set();
   const line = caption.querySelector("span");
   function showLine(index) {
     lineIndex = index;
@@ -1903,16 +1905,20 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
   }
   const button2 = (name, label) => `<button type="button" class="text-button" data-action="phone-${name}">${label}</button>`;
   const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
-  function androidLinks(path2) {
-    if (!/Android/i.test(navigator.userAgent)) return `<a class="text-button" href="${androidTrial}">\u5728\u5B89\u5353\u624B\u673A\u5B89\u88C5\u5C4F\u5E55\u5F15\u5BFC</a>`;
-    const href = esc(launchAndroid(path2));
+  function androidLinks(path2, ref) {
+    if (!/Android/i.test(navigator.userAgent)) return `<a class="text-button" href="${androidDownload}">\u4E0B\u8F7D\u79BE\u4F34\u5B89\u5353\u7248</a>`;
+    const fullPath = path2 + (path2.includes("?") ? "&" : "?") + "ref=" + encodeURIComponent(ref);
+    const inHeban = /HebanAndroid\//.test(navigator.userAgent);
+    const href = esc(inHeban ? `heban-guide://phone/${fullPath}` : launchAndroid(fullPath));
     return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">\u5F00\u542F\u8DE8\u5E94\u7528\u5F15\u5BFC</a>
-      <a class="text-button" href="${androidTrial}">\u4E0B\u8F7D\u5B89\u88C5\u5305</a></div>`;
+      ${inHeban ? "" : `<a class="text-button" href="${androidDownload}">\u4E0B\u8F7D\u79BE\u4F34\u5B89\u5353\u7248</a>`}</div>`;
   }
-  function directLink(question) {
-    return phoneTopic(question) === "font" ? androidLinks("font") : "";
+  function directLink(question, ref) {
+    return phoneTopic(question) === "font" ? androidLinks("font", ref) : "";
   }
   function controls(id) {
+    if (completed.has(id)) return `<div class="phone-guide-controls"><span role="status">\u5F15\u5BFC\u5DF2\u5B8C\u6210</span>
+      <button type="button" class="text-button" data-action="open-phone-guide" data-id="${esc(id)}">\u518D\u505A\u4E00\u6B21</button></div>`;
     if (!visible || current?.id !== id) return "";
     const { platform, pending: pending2, error, steps, index, clarification, muted } = current;
     let content;
@@ -1924,7 +1930,7 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
     else content = (index ? button2("previous", "\u4E0A\u4E00\u6B65") : "") + button2("listen", "\u91CD\u542C") + (muted ? "" : button2("mute", "\u5173\u58F0\u97F3")) + (muted && lineIndex < lines.length - 1 ? button2("more", "\u4E0B\u4E00\u53E5") : "") + button2("next", index + 1 < steps.length ? "\u4E0B\u4E00\u6B65" : "\u505A\u5B8C\u4E86");
     const path2 = platform === "android" ? androidGuidePath(current) : "";
     return `<div class="phone-guide-controls" aria-label="\u5B57\u5E55\u548C\u8FDB\u5EA6">${content}
-      ${platform && !pending2 ? button2("change", "\u6362\u624B\u673A") : ""}${button2("end", "\u7ED3\u675F")}${path2 ? androidLinks(path2) : ""}</div>`;
+      ${platform && !pending2 ? button2("change", "\u6362\u624B\u673A") : ""}${button2("end", "\u7ED3\u675F")}${path2 ? androidLinks(path2, id) : ""}</div>`;
   }
   function playNative(start) {
     const active = narration = {};
@@ -1998,7 +2004,8 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
       title: "",
       androidApp: "",
       targets: [],
-      apps: []
+      apps: [],
+      after: []
     };
     const topic = phoneTopic(active.question);
     if (topic) {
@@ -2019,8 +2026,9 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
     }
   }
   function open(question, history2) {
+    const restart = completed.delete(question.id);
     visible = true;
-    if (current?.id === question.id) {
+    if (current?.id === question.id && !restart) {
       step();
       return;
     }
@@ -2086,10 +2094,28 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
     stop();
     showLine(0);
   }
-  return { open, action, controls, directLink, close, reset() {
-    close();
-    current = null;
-  } };
+  function applyNativeResult(result) {
+    const { ref, status: status2 } = result ?? {};
+    if (typeof ref !== "string" || !["running", "completed", "ended"].includes(status2)) return;
+    const changed = status2 === "completed" ? !completed.has(ref) : completed.has(ref);
+    if (status2 === "completed") completed.add(ref);
+    else completed.delete(ref);
+    const active = current?.id === ref && visible;
+    if (active) close();
+    if (active || changed) render2();
+  }
+  return {
+    open,
+    action,
+    controls,
+    directLink,
+    close,
+    applyNativeResult,
+    reset() {
+      close();
+      current = null;
+    }
+  };
 }
 
 // app.js
@@ -2556,7 +2582,7 @@ function phoneGuideButton(questionId) {
   if (!question) return "";
   const guide = phoneGuide.controls(questionId);
   if (guide) return guide;
-  return `${phoneGuide.directLink(question.text)}<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
+  return `${phoneGuide.directLink(question.text, questionId)}<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
 }
 function renderChatMessages(messages, mode) {
   let question;
@@ -3858,6 +3884,7 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", records.stopCamera);
 window.addEventListener("pagehide", electricity.stopMedia);
 window.addEventListener("pagehide", phoneGuide.close);
+window.addEventListener("heban-guide-result", (event) => phoneGuide.applyNativeResult(event.detail));
 window.addEventListener("pageshow", (event) => {
   if (event.persisted && route === "capture") void records.action("capture-reset");
 });
