@@ -513,3 +513,23 @@ body:has(.app-nav) .toast { bottom: calc(var(--nav-height) + 10px); }
 .electricity-photo .device-photo-image { max-height: 58vh; width: auto; max-width: 100%; }
 .electricity-reader-nav > .button { flex: 1 1 110px; }
 .electricity-reader .photo-board { margin: 0; }
+
+.phone-offer { min-height: 48px; text-align: left; }
+.phone-guide { display: grid; gap: 12px; }
+.phone-guide h3, .phone-guide p { margin: 0; }
+.phone-guide-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.phone-guide-actions .button { min-height: 48px; flex: 1 1 108px; }
+.phone-guide > .button { justify-self: start; }
+.phone-step-count { color: var(--muted); font-weight: 700; }
+.phone-caption {
+  padding: 16px 14px;
+  border-radius: 14px;
+  background: #eef2ff;
+  color: #192746;
+  font-size: 1.55rem;
+  font-weight: 750;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.phone-voice-status { color: var(--muted); }
+.phone-voice-status:empty { display: none; }

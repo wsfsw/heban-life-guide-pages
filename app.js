@@ -1824,6 +1824,196 @@ function createElectricityCards({ api: api2, escapeHtml: escapeHtml2, pageHeader
   };
 }
 
+// phone-guide.js
+var labels = { font: "\u653E\u5927\u624B\u673A\u5B57", wifi: "\u8FDE\u63A5\u65E0\u7EBF\u7F51" };
+var phoneLessons = {
+  android: {
+    font: ["\u8BF7\u6253\u5F00\u624B\u673A\u91CC\u7684\u201C\u8BBE\u7F6E\u201D\u3002", "\u5728\u8BBE\u7F6E\u91CC\u641C\u7D22\u201C\u5B57\u4F53\u5927\u5C0F\u201D\uFF0C\u70B9\u5F00\u5BF9\u5E94\u7684\u7ED3\u679C\u3002", "\u628A\u5B57\u53F7\u6ED1\u5757\u5F80\u53F3\u79FB\uFF0C\u76F4\u5230\u5B57\u80FD\u770B\u6E05\u3002"],
+    wifi: ["\u8BF7\u6253\u5F00\u624B\u673A\u91CC\u7684\u201C\u8BBE\u7F6E\u201D\u3002", "\u627E\u5230\u201C\u65E0\u7EBF\u5C40\u57DF\u7F51\u201D\u6216\u201C\u65E0\u7EBF\u7F51\u7EDC\u201D\uFF0C\u628A\u5B83\u6253\u5F00\u3002", "\u70B9\u60A8\u8BA4\u8BC6\u7684\u7F51\u7EDC\u3002\u9700\u8981\u5BC6\u7801\u65F6\uFF0C\u5728\u624B\u673A\u5F39\u51FA\u7684\u8FDE\u63A5\u6846\u91CC\u8F93\u5165\u3002"]
+  },
+  iphone: {
+    font: ["\u8BF7\u6253\u5F00\u82F9\u679C\u624B\u673A\u7684\u201C\u8BBE\u7F6E\u201D\u3002", "\u70B9\u201C\u8F85\u52A9\u529F\u80FD\u201D\uFF0C\u518D\u70B9\u201C\u663E\u793A\u4E0E\u6587\u5B57\u5927\u5C0F\u201D\u3002", "\u70B9\u201C\u66F4\u5927\u5B57\u4F53\u201D\uFF0C\u628A\u5E95\u90E8\u7684\u6ED1\u5757\u5F80\u53F3\u79FB\u3002"],
+    wifi: ["\u8BF7\u6253\u5F00\u82F9\u679C\u624B\u673A\u7684\u201C\u8BBE\u7F6E\u201D\u3002", "\u70B9\u201C\u65E0\u7EBF\u5C40\u57DF\u7F51\u201D\uFF0C\u628A\u5B83\u6253\u5F00\u3002", "\u70B9\u60A8\u8BA4\u8BC6\u7684\u7F51\u7EDC\u3002\u9700\u8981\u5BC6\u7801\u65F6\uFF0C\u5728\u624B\u673A\u5F39\u51FA\u7684\u8FDE\u63A5\u6846\u91CC\u8F93\u5165\u3002"]
+  }
+};
+var phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
+function phoneTopic(question) {
+  const text = question.trim().replace(/[\s？?。，！!\-]/g, "").toLowerCase();
+  if (/^(怎么|如何|想|请问|请问怎么|帮我)?(把)?(手机)?(放大|调大|增大)(手机)?(字体|字|字号)(呢|吗)?$/.test(text) || /^(手机)?(字体|字|字号)太小(了)?(怎么办)?$/.test(text)) return "font";
+  if (/^(怎么|如何|想|请问|请问怎么|帮我)?(用)?(手机)?(连接|连上|连|接入)(家里|家里的)?(wifi|无线网|无线网络|无线局域网)(呢|吗)?$/.test(text)) return "wifi";
+  return "";
+}
+function createPhoneGuide({ dialog: dialog2, showDialog: showDialog2, api: api2, esc, speak: speak2, stopSpeech: stopSpeech2, getAccount }) {
+  let current;
+  let player;
+  let spoken = false;
+  let voiceStatus = "";
+  function stop() {
+    const active = player;
+    player = null;
+    if (active) active.pause();
+    if (spoken) {
+      spoken = false;
+      stopSpeech2();
+    }
+  }
+  const button2 = (name, label, style = "quiet") => `<button type="button" class="button ${style}" data-action="phone-${name}">${label}</button>`;
+  const ready = () => current?.steps?.length && current.index < current.steps.length;
+  const panel = () => dialog2.querySelector(".phone-guide");
+  function setStatus(text) {
+    voiceStatus = text;
+    const target = panel()?.querySelector(".phone-voice-status");
+    if (target) target.textContent = text;
+  }
+  function render2(focus = "") {
+    const { platform, steps, index, clarification, pending: pending2, error, title, auto } = current;
+    let body;
+    if (!platform) {
+      body = `<h3>\u60A8\u7528\u7684\u662F\u54EA\u79CD\u624B\u673A\uFF1F</h3><div class="phone-guide-actions">${button2("android", "\u5B89\u5353\u624B\u673A", "")}${button2("iphone", "\u82F9\u679C\u624B\u673A", "")}</div>`;
+    } else if (pending2) {
+      body = '<p role="status">\u6B63\u5728\u51C6\u5907\u624B\u673A\u64CD\u4F5C\u6B65\u9AA4\u2026</p>';
+    } else if (error) {
+      body = `<p class="form-error" role="alert">${esc(error)}</p><div class="phone-guide-actions">${button2("retry", "\u518D\u8BD5\u4E00\u6B21", "")}${button2("change", "\u6362\u4E00\u79CD\u624B\u673A")}</div>`;
+    } else if (!steps.length) {
+      body = `<p class="phone-caption">${esc(clarification)}</p>${button2("answer", "\u56DE\u53BB\u8865\u5145\u95EE\u9898", "")}`;
+    } else if (index >= steps.length) {
+      body = `<h3>\u5DF2\u7ECF\u770B\u5B8C\u4E86</h3><div class="phone-guide-actions">${button2("restart", "\u4ECE\u5934\u518D\u542C")}${button2("answer", "\u8FD4\u56DE\u52A9\u624B", "")}</div>`;
+    } else {
+      body = `<p class="phone-step-count">${esc(title)} \xB7 \u7B2C ${index + 1} \u6B65\uFF0C\u5171 ${steps.length} \u6B65</p>
+        <p class="phone-caption" id="phone-caption" tabindex="-1">${esc(steps[index])}</p>
+        <div class="phone-guide-actions">${button2("listen", auto ? "\u518D\u542C\u4E00\u904D" : "\u542C\u8FD9\u4E00\u6B65", "")}${auto ? button2("mute", "\u5173\u95ED\u58F0\u97F3") : ""}</div>
+        <p class="phone-voice-status" role="status">${esc(voiceStatus)}</p>
+        <div class="phone-guide-actions phone-step-nav">${index ? button2("previous", "\u4E0A\u4E00\u6B65") : ""}${button2("next", index + 1 < steps.length ? "\u4E0B\u4E00\u6B65" : "\u6211\u505A\u5B8C\u4E86", "primary")}</div>
+        <p class="device-help">\u53EF\u4EE5\u5148\u53BB\u624B\u673A\u91CC\u64CD\u4F5C\uFF0C\u56DE\u5230\u79BE\u4F34\u4F1A\u7559\u5728\u8FD9\u4E00\u6B65\u3002</p>${button2("change", "\u6362\u4E00\u79CD\u624B\u673A")}`;
+    }
+    const markup = `<div class="phone-guide">${body}</div>`;
+    if (dialog2.open && panel()) panel().outerHTML = markup;
+    else showDialog2("\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A", markup);
+    if (focus) panel()?.querySelector(focus)?.focus({ preventScroll: true });
+  }
+  function open(question, history2) {
+    if (current?.id !== question.id) {
+      stop();
+      voiceStatus = "";
+      current = { id: question.id, question: question.text, history: history2, owner: getAccount(), platform: "", steps: [], index: 0, auto: false };
+    }
+    render2();
+  }
+  async function load(platform) {
+    stop();
+    voiceStatus = "";
+    const active = current = { ...current, platform, steps: [], index: 0, auto: false, pending: true, error: "", clarification: "" };
+    const topic = phoneTopic(active.question);
+    if (topic) {
+      Object.assign(active, { steps: phoneLessons[platform][topic], title: labels[topic], topic, pending: false });
+      render2("#phone-caption");
+      return;
+    }
+    active.topic = "";
+    render2();
+    try {
+      const { phoneGuide: phoneGuide2 } = await api2({ text: active.question, history: active.history, phonePlatform: platform });
+      if (!phoneGuide2 || !Array.isArray(phoneGuide2.steps)) throw new Error("\u8FD9\u6B21\u6CA1\u6709\u8BFB\u5230\u624B\u673A\u64CD\u4F5C\u6B65\u9AA4\uFF0C\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
+      Object.assign(active, phoneGuide2);
+    } catch (error) {
+      active.error = error.message;
+    } finally {
+      active.pending = false;
+      if (active === current && active.owner === getAccount() && dialog2.open && panel()) render2("#phone-caption");
+    }
+  }
+  function nativeVoice(text) {
+    spoken = true;
+    speak2(text, (status2) => {
+      if (!spoken) return;
+      if (status2 === "error") setStatus("\u6CA1\u6709\u542C\u5230\u58F0\u97F3\u65F6\uFF0C\u53EF\u4EE5\u5148\u770B\u5927\u5B57\uFF0C\u6216\u7528\u624B\u673A\u81EA\u5E26\u7684\u6D4F\u89C8\u5668\u6253\u5F00\u79BE\u4F34\u3002");
+      else setStatus(status2 === "playing" ? "\u6B63\u5728\u6717\u8BFB\u8FD9\u4E00\u6B65" : "");
+      if (status2 !== "playing") spoken = false;
+    });
+  }
+  function play() {
+    if (!ready()) return;
+    stop();
+    setStatus("");
+    const { platform, topic, index, steps } = current;
+    if (!topic) {
+      nativeVoice(steps[index]);
+      return;
+    }
+    const audio = player = new Audio("./" + phoneAudio(platform, topic, index));
+    audio.onplaying = () => {
+      if (player === audio) setStatus("\u6B63\u5728\u6717\u8BFB\u8FD9\u4E00\u6B65");
+    };
+    audio.onended = () => {
+      if (player === audio) {
+        player = null;
+        setStatus("");
+      }
+    };
+    audio.play().catch(() => {
+      if (player !== audio) return;
+      player = null;
+      nativeVoice(steps[index]);
+    });
+  }
+  function action(name) {
+    if (!current || !panel()) return;
+    switch (name) {
+      case "android":
+      case "iphone":
+        void load(name);
+        return;
+      case "retry":
+        void load(current.platform);
+        return;
+      case "change":
+        stop();
+        current = { ...current, platform: "", auto: false };
+        render2(".phone-guide-actions button");
+        return;
+      case "answer":
+        dialog2.close();
+        setTimeout(() => document.getElementById("message-input")?.focus(), 0);
+        return;
+      case "listen":
+        current.auto = true;
+        render2('[data-action="phone-listen"]');
+        play();
+        return;
+      case "mute":
+        stop();
+        voiceStatus = "";
+        current.auto = false;
+        render2('[data-action="phone-listen"]');
+        return;
+      case "next":
+        current.index++;
+        break;
+      case "previous":
+        current.index--;
+        break;
+      case "restart":
+        current.index = 0;
+        break;
+      default:
+        return;
+    }
+    stop();
+    voiceStatus = "";
+    render2("#phone-caption");
+    if (current.auto) play();
+  }
+  function close() {
+    stop();
+    voiceStatus = "";
+    if (current) current.auto = false;
+  }
+  return { open, action, close, reset() {
+    close();
+    current = null;
+  } };
+}
+
 // app.js
 var app = document.querySelector("#app");
 var cloudSite2 = document.querySelector('meta[name="heban-cloud-site"]')?.content;
@@ -1869,6 +2059,15 @@ var icon = (name, size = 24) => `<svg width="${size}" height="${size}" viewBox="
 var escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 var records = createRecords({ paint: render, pageHeader, escapeHtml, icon, showDialog, closeDialog: () => dialog.close(), notify, isGuest: () => account?.guest });
 var electricity = createElectricityCards({ api, escapeHtml, pageHeader, loginAction, render, speak, stopSpeech, account: () => account, family: () => family });
+var phoneGuide = createPhoneGuide({
+  dialog,
+  showDialog,
+  api: askAssistant,
+  esc: escapeHtml,
+  speak: (text, status2) => speak(text, state.speechRate, true, status2),
+  stopSpeech,
+  getAccount: () => account
+});
 var state = newState();
 var route = readRoute();
 var returnFocus = null;
@@ -1938,12 +2137,13 @@ function stopSpeech() {
   const engine = window.speechSynthesis;
   if (engine?.speaking || engine?.pending) engine.cancel();
 }
-function speak(text, rate = state.speechRate, manual = true) {
+function speak(text, rate = state.speechRate, manual = true, onStatus) {
   if (!text?.trim()) return;
   const engine = window.speechSynthesis;
   const Utterance = window.SpeechSynthesisUtterance;
   if (!engine || !Utterance) {
     notify("\u5F53\u524D\u6D4F\u89C8\u5668\u4E0D\u63D0\u4F9B\u6717\u8BFB\u3002\u8BF7\u7528\u624B\u673A\u81EA\u5E26\u7684\u6D4F\u89C8\u5668\u6253\u5F00\u79BE\u4F34\u3002");
+    onStatus?.("error");
     return;
   }
   stopSpeech();
@@ -1956,7 +2156,11 @@ function speak(text, rate = state.speechRate, manual = true) {
   function failure(error) {
     if (speechQueue !== queue) return;
     stopSpeech();
-    if (error === "canceled" || error === "interrupted") return;
+    if (error === "canceled" || error === "interrupted") {
+      onStatus?.("ended");
+      return;
+    }
+    onStatus?.("error");
     notify(!manual ? "\u81EA\u52A8\u6717\u8BFB\u672A\u542F\u52A8\u3002\u8BF7\u70B9\u56DE\u590D\u4E0B\u65B9\u7684\u300C\u6717\u8BFB\u300D\u3002" : error === "voice-unavailable" || error === "language-unavailable" ? "\u8FD9\u53F0\u624B\u673A\u7F3A\u5C11\u4E2D\u6587\u8BED\u97F3\u3002\u8BF7\u5728\u624B\u673A\u7CFB\u7EDF\u91CC\u6DFB\u52A0\u4E2D\u6587\u8BED\u97F3\u3002" : "\u6CA1\u6709\u5F00\u59CB\u6717\u8BFB\u3002\u8BF7\u68C0\u67E5\u5A92\u4F53\u97F3\u91CF\uFF0C\u6216\u7528\u624B\u673A\u81EA\u5E26\u7684\u6D4F\u89C8\u5668\u6253\u5F00\u79BE\u4F34\u3002");
   }
   function next() {
@@ -1965,13 +2169,18 @@ function speak(text, rate = state.speechRate, manual = true) {
     const part = chunks.shift();
     if (!part) {
       speechQueue = null;
+      onStatus?.("ended");
       return;
     }
     const item = new Utterance(part);
     item.lang = voice?.lang ?? "zh-CN";
     if (voice) item.voice = voice;
     item.rate = speechRates[rate]?.value ?? speechRates.normal.value;
-    item.onstart = () => clearTimeout(queue.startTimer);
+    item.onstart = () => {
+      if (speechQueue !== queue) return;
+      clearTimeout(queue.startTimer);
+      onStatus?.("playing");
+    };
     item.onend = next;
     item.onerror = (event) => failure(event.error);
     queue.utterance = item;
@@ -2255,6 +2464,7 @@ function chatScreen(mode) {
       ${waiting ? '<p class="assistant-wait" role="status">\u79BE\u4F34\u6B63\u5728\u56DE\u7B54\u2026</p>' : ""}
       ${failure?.account === account ? `<div class="assistant-retry"><p role="alert">${escapeHtml(failure.error.message)}</p>
         <button type="button" class="button quiet" data-action="assistant-retry">\u518D\u95EE\u4E00\u6B21</button>
+        ${mode === "ask" && phoneTopic(failure.text) ? phoneGuideButton(failure.questionId) : ""}
         ${direct ? `<a class="button quiet" href="${escapeHtml(direct)}" target="_blank" rel="noopener">\u76F4\u63A5\u6253\u5F00\u52A9\u624B</a>` : ""}
         ${mode === "ask" ? '<a class="section-link" href="#/guides">\u5148\u770B\u64CD\u4F5C\u6B65\u9AA4</a>' : ""}</div>` : ""}
     </div>
@@ -2265,9 +2475,15 @@ function chatScreen(mode) {
       <p class="chat-note">\u8BF7\u522B\u53D1\u9001\u8D26\u53F7\u3001\u5BC6\u7801\u6216\u9A8C\u8BC1\u7801\u3002\u5728\u7EBF\u56DE\u590D\u7531 DeepSeek \u63D0\u4F9B\u3002</p>
     </div></main>`;
 }
+function phoneGuideButton(questionId) {
+  return `<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
+}
 function renderMessage(message) {
   const tools = [];
   if (message.role === "assistant") tools.push(`<button class="message-action" type="button" data-action="read" data-text="${escapeHtml(message.text)}" aria-label="\u6717\u8BFB\u8FD9\u6761\u56DE\u590D">${icon("sound", 17)}\u6717\u8BFB</button>`);
+  if (route === "ask" && message.guideFor && state.messages.ask.some((item) => item.role === "user" && item.id === message.guideFor)) {
+    tools.push(phoneGuideButton(message.guideFor));
+  }
   if (route === "ask" && message.role === "user") {
     tools.push(`<button class="message-action" type="button" data-action="share" data-id="${message.id}">\u5206\u4EAB\u7ED9\u5BB6\u4EBA</button>`);
   }
@@ -2771,6 +2987,7 @@ async function startCloud(mode) {
   const switching = Boolean(authMode && mode !== authMode);
   const result = await connectCloud(updateCloudStatus, mode);
   electricity.reset();
+  phoneGuide.reset();
   account = result.user;
   authMode = mode;
   account = mode === "legacy" ? { ...account, legacy: true } : account;
@@ -2847,6 +3064,7 @@ async function chooseAccess(action, button2) {
       await flushBeforeSwitch();
       if (authMode === "account") await api("/api/auth/logout", "POST");
       electricity.reset();
+      phoneGuide.reset();
       accessPreference("");
       account = null;
       authMode = "";
@@ -2994,6 +3212,7 @@ async function sendMessage(text, retry = false) {
   const draft = /提醒|叫我|记得/.test(input) ? parseReminder(input) : null;
   const validDraft = draft?.title && draft.at > Date.now() ? draft : null;
   let reply;
+  let offerPhoneGuide = false;
   let failure;
   if (validDraft) reply = `\u63D0\u9192\u5DF2\u7ECF\u586B\u597D\uFF1A${formatWhen(validDraft.at)}\uFF0C${validDraft.title}\u3002\u8BF7\u6838\u5BF9\u4E00\u4E0B\uFF0C\u518D\u4FDD\u5B58\u3002`;
   else {
@@ -3002,7 +3221,9 @@ async function sendMessage(text, retry = false) {
     render();
     document.querySelector(".assistant-wait")?.scrollIntoView({ block: "nearest" });
     try {
-      reply = (await askAssistant({ text: input, history: history2, style: state.persona })).answer;
+      const result = await askAssistant({ text: input, history: history2, style: state.persona, ...mode === "ask" ? { suggestPhoneGuide: true } : {} });
+      reply = result.answer;
+      offerPhoneGuide = mode === "ask" && (result.offerPhoneGuide === true || Boolean(phoneTopic(input)));
       if (!reply) throw new Error("\u6CA1\u6709\u6536\u5230\u56DE\u590D\u3002");
     } catch (error) {
       failure = error;
@@ -3012,7 +3233,14 @@ async function sendMessage(text, retry = false) {
   }
   if (account !== active) return;
   if (failure) failedReplies.set(mode, { account: active, text: input, error: failure, questionId });
-  else messages.push({ id: crypto.randomUUID(), role: "assistant", text: reply, draft: validDraft, at: Date.now() });
+  else messages.push({
+    id: crypto.randomUUID(),
+    role: "assistant",
+    text: reply,
+    draft: validDraft,
+    at: Date.now(),
+    ...offerPhoneGuide ? { guideFor: questionId } : {}
+  });
   if (messages.length > 150) messages.splice(0, messages.length - 150);
   noteActivity();
   save();
@@ -3096,6 +3324,19 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (!account) return;
+  if (action === "open-phone-guide" && route === "ask") {
+    const messages = state.messages.ask;
+    const index = messages.findIndex((item2) => item2.role === "user" && item2.id === id);
+    if (index !== -1) {
+      stopSpeech();
+      phoneGuide.open(messages[index], messages.slice(Math.max(0, index - 4), index).map(({ role, text: text2 }) => ({ role, text: text2 })));
+    }
+    return;
+  }
+  if (action.startsWith("phone-")) {
+    phoneGuide.action(action.slice("phone-".length));
+    return;
+  }
   if (action.startsWith("electricity-")) {
     void electricity.action(action.slice("electricity-".length), button2, event);
     return;
@@ -3456,6 +3697,7 @@ document.addEventListener("keydown", (event) => {
   updatePin(event.target.form, { x: adjust(x, dx), y: adjust(y, dy) });
 });
 dialog.addEventListener("close", () => {
+  if (!dialog.open) phoneGuide.close();
   if (returnFocus?.isConnected) returnFocus.focus();
   returnFocus = null;
 });
@@ -3519,6 +3761,7 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", records.stopCamera);
 window.addEventListener("pagehide", electricity.stopMedia);
+window.addEventListener("pagehide", phoneGuide.close);
 window.addEventListener("pageshow", (event) => {
   if (event.persisted && route === "capture") void records.action("capture-reset");
 });
