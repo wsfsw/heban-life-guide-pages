@@ -1825,7 +1825,6 @@ function createElectricityCards({ api: api2, escapeHtml: escapeHtml2, pageHeader
 }
 
 // phone-guide.js
-var labels = { font: "\u653E\u5927\u624B\u673A\u5B57", wifi: "\u8FDE\u63A5\u65E0\u7EBF\u7F51" };
 var phoneLessons = {
   android: {
     font: ["\u8BF7\u6253\u5F00\u624B\u673A\u91CC\u7684\u201C\u8BBE\u7F6E\u201D\u3002", "\u5728\u8BBE\u7F6E\u91CC\u641C\u7D22\u201C\u5B57\u4F53\u5927\u5C0F\u201D\uFF0C\u70B9\u5F00\u5BF9\u5E94\u7684\u7ED3\u679C\u3002", "\u628A\u5B57\u53F7\u6ED1\u5757\u5F80\u53F3\u79FB\uFF0C\u76F4\u5230\u5B57\u80FD\u770B\u6E05\u3002"],
@@ -1837,127 +1836,160 @@ var phoneLessons = {
   }
 };
 var phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
+var androidTrial = "https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk";
+var androidLaunch = `intent://phone/font#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
 function phoneTopic(question) {
   const text = question.trim().replace(/[\s？?。，！!\-]/g, "").toLowerCase();
   if (/^(怎么|如何|想|请问|请问怎么|帮我)?(把)?(手机)?(放大|调大|增大)(手机)?(字体|字|字号)(呢|吗)?$/.test(text) || /^(手机)?(字体|字|字号)太小(了)?(怎么办)?$/.test(text)) return "font";
   if (/^(怎么|如何|想|请问|请问怎么|帮我)?(用)?(手机)?(连接|连上|连|接入)(家里|家里的)?(wifi|无线网|无线网络|无线局域网)(呢|吗)?$/.test(text)) return "wifi";
   return "";
 }
-function createPhoneGuide({ dialog: dialog2, showDialog: showDialog2, api: api2, esc, speak: speak2, stopSpeech: stopSpeech2, getAccount }) {
+function captionLines(text) {
+  const phrases = text.match(/[^，。！？；、]+[，。！？；、]*|[，。！？；、]+/g) ?? [];
+  const result = [];
+  for (const phrase of phrases) {
+    const characters = Array.from(phrase);
+    while (characters.length) {
+      const chunk = characters.splice(0, 13).join("").trim();
+      const last = result.at(-1);
+      if (last && Array.from(last + chunk).length <= 13) result[result.length - 1] += chunk;
+      else if (chunk) result.push(chunk);
+    }
+  }
+  return result;
+}
+function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: stopSpeech2, render: render2 }) {
   let current;
+  let visible = false;
   let player;
-  let spoken = false;
-  let voiceStatus = "";
+  let narration;
+  let lines = [];
+  let lineIndex = 0;
+  const line = caption.querySelector("span");
+  function showLine(index) {
+    lineIndex = index;
+    const text = lines[index] ?? "";
+    if (line.textContent !== text) line.textContent = text;
+    caption.hidden = !visible || !text;
+  }
   function stop() {
-    const active = player;
+    const audio = player;
     player = null;
-    if (active) active.pause();
-    if (spoken) {
-      spoken = false;
+    audio?.pause();
+    if (narration) {
+      narration = null;
       stopSpeech2();
     }
   }
-  const button2 = (name, label, style = "quiet") => `<button type="button" class="button ${style}" data-action="phone-${name}">${label}</button>`;
-  const ready = () => current?.steps?.length && current.index < current.steps.length;
-  const panel = () => dialog2.querySelector(".phone-guide");
-  function setStatus(text) {
-    voiceStatus = text;
-    const target = panel()?.querySelector(".phone-voice-status");
-    if (target) target.textContent = text;
+  const button2 = (name, label) => `<button type="button" class="text-button" data-action="phone-${name}">${label}</button>`;
+  const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
+  function controls(id) {
+    if (!visible || current?.id !== id) return "";
+    const { platform, pending: pending2, error, steps, index, clarification, muted } = current;
+    let content;
+    if (!platform) content = button2("android", "\u5B89\u5353\u624B\u673A") + button2("iphone", "\u82F9\u679C\u624B\u673A");
+    else if (pending2) content = '<span role="status">\u6B63\u5728\u51C6\u5907\u6B65\u9AA4\u2026</span>';
+    else if (error) content = `<span role="alert">${esc(error)}</span>${button2("retry", "\u91CD\u8BD5")}`;
+    else if (!steps.length) content = `<span role="status">${esc(clarification)}</span>`;
+    else if (index >= steps.length) content = '<span role="status">\u5DF2\u5B8C\u6210</span>' + button2("restart", "\u518D\u6765\u4E00\u6B21");
+    else content = (index ? button2("previous", "\u4E0A\u4E00\u6B65") : "") + button2("listen", "\u91CD\u542C") + (muted ? "" : button2("mute", "\u5173\u58F0\u97F3")) + (muted && lineIndex < lines.length - 1 ? button2("more", "\u4E0B\u4E00\u53E5") : "") + button2("next", index + 1 < steps.length ? "\u4E0B\u4E00\u6B65" : "\u505A\u5B8C\u4E86");
+    const trial = platform === "android" && current.topic === "font" && /Android/i.test(navigator.userAgent) ? `<a class="text-button" href="${androidLaunch}">\u5B89\u5353\u5149\u70B9\u5F15\u5BFC\uFF08\u8BD5\u7528\uFF09</a><a class="text-button" href="${androidTrial}">\u4E0B\u8F7D\u8BD5\u7528\u7248</a>` : "";
+    return `<div class="phone-guide-controls" aria-label="\u5B57\u5E55\u548C\u8FDB\u5EA6">${content}
+      ${platform && !pending2 ? button2("change", "\u6362\u624B\u673A") : ""}${button2("end", "\u7ED3\u675F")}${trial}</div>`;
   }
-  function render2(focus = "") {
-    const { platform, steps, index, clarification, pending: pending2, error, title, auto } = current;
-    let body;
-    if (!platform) {
-      body = `<h3>\u60A8\u7528\u7684\u662F\u54EA\u79CD\u624B\u673A\uFF1F</h3><div class="phone-guide-actions">${button2("android", "\u5B89\u5353\u624B\u673A", "")}${button2("iphone", "\u82F9\u679C\u624B\u673A", "")}</div>`;
-    } else if (pending2) {
-      body = '<p role="status">\u6B63\u5728\u51C6\u5907\u624B\u673A\u64CD\u4F5C\u6B65\u9AA4\u2026</p>';
-    } else if (error) {
-      body = `<p class="form-error" role="alert">${esc(error)}</p><div class="phone-guide-actions">${button2("retry", "\u518D\u8BD5\u4E00\u6B21", "")}${button2("change", "\u6362\u4E00\u79CD\u624B\u673A")}</div>`;
-    } else if (!steps.length) {
-      body = `<p class="phone-caption">${esc(clarification)}</p>${button2("answer", "\u56DE\u53BB\u8865\u5145\u95EE\u9898", "")}`;
-    } else if (index >= steps.length) {
-      body = `<h3>\u5DF2\u7ECF\u770B\u5B8C\u4E86</h3><div class="phone-guide-actions">${button2("restart", "\u4ECE\u5934\u518D\u542C")}${button2("answer", "\u8FD4\u56DE\u52A9\u624B", "")}</div>`;
-    } else {
-      body = `<p class="phone-step-count">${esc(title)} \xB7 \u7B2C ${index + 1} \u6B65\uFF0C\u5171 ${steps.length} \u6B65</p>
-        <p class="phone-caption" id="phone-caption" tabindex="-1">${esc(steps[index])}</p>
-        <div class="phone-guide-actions">${button2("listen", auto ? "\u518D\u542C\u4E00\u904D" : "\u542C\u8FD9\u4E00\u6B65", "")}${auto ? button2("mute", "\u5173\u95ED\u58F0\u97F3") : ""}</div>
-        <p class="phone-voice-status" role="status">${esc(voiceStatus)}</p>
-        <div class="phone-guide-actions phone-step-nav">${index ? button2("previous", "\u4E0A\u4E00\u6B65") : ""}${button2("next", index + 1 < steps.length ? "\u4E0B\u4E00\u6B65" : "\u6211\u505A\u5B8C\u4E86", "primary")}</div>
-        <p class="device-help">\u53EF\u4EE5\u5148\u53BB\u624B\u673A\u91CC\u64CD\u4F5C\uFF0C\u56DE\u5230\u79BE\u4F34\u4F1A\u7559\u5728\u8FD9\u4E00\u6B65\u3002</p>${button2("change", "\u6362\u4E00\u79CD\u624B\u673A")}`;
+  function playNative(start) {
+    const active = narration = {};
+    function playLine(index) {
+      if (narration !== active || !ready()) return;
+      showLine(index);
+      speak2(lines[index], (status2) => {
+        if (narration !== active) return;
+        if (status2 === "ended" && index + 1 < lines.length) playLine(index + 1);
+        else if (status2 === "ended" || status2 === "error") {
+          narration = null;
+          if (status2 === "error") {
+            current.muted = true;
+            render2();
+          }
+        }
+      });
     }
-    const markup = `<div class="phone-guide">${body}</div>`;
-    if (dialog2.open && panel()) panel().outerHTML = markup;
-    else showDialog2("\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A", markup);
-    if (focus) panel()?.querySelector(focus)?.focus({ preventScroll: true });
-  }
-  function open(question, history2) {
-    if (current?.id !== question.id) {
-      stop();
-      voiceStatus = "";
-      current = { id: question.id, question: question.text, history: history2, owner: getAccount(), platform: "", steps: [], index: 0, auto: false };
-    }
-    render2();
-  }
-  async function load(platform) {
-    stop();
-    voiceStatus = "";
-    const active = current = { ...current, platform, steps: [], index: 0, auto: false, pending: true, error: "", clarification: "" };
-    const topic = phoneTopic(active.question);
-    if (topic) {
-      Object.assign(active, { steps: phoneLessons[platform][topic], title: labels[topic], topic, pending: false });
-      render2("#phone-caption");
-      return;
-    }
-    active.topic = "";
-    render2();
-    try {
-      const { phoneGuide: phoneGuide2 } = await api2({ text: active.question, history: active.history, phonePlatform: platform });
-      if (!phoneGuide2 || !Array.isArray(phoneGuide2.steps)) throw new Error("\u8FD9\u6B21\u6CA1\u6709\u8BFB\u5230\u624B\u673A\u64CD\u4F5C\u6B65\u9AA4\uFF0C\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
-      Object.assign(active, phoneGuide2);
-    } catch (error) {
-      active.error = error.message;
-    } finally {
-      active.pending = false;
-      if (active === current && active.owner === getAccount() && dialog2.open && panel()) render2("#phone-caption");
-    }
-  }
-  function nativeVoice(text) {
-    spoken = true;
-    speak2(text, (status2) => {
-      if (!spoken) return;
-      if (status2 === "error") setStatus("\u6CA1\u6709\u542C\u5230\u58F0\u97F3\u65F6\uFF0C\u53EF\u4EE5\u5148\u770B\u5927\u5B57\uFF0C\u6216\u7528\u624B\u673A\u81EA\u5E26\u7684\u6D4F\u89C8\u5668\u6253\u5F00\u79BE\u4F34\u3002");
-      else setStatus(status2 === "playing" ? "\u6B63\u5728\u6717\u8BFB\u8FD9\u4E00\u6B65" : "");
-      if (status2 !== "playing") spoken = false;
-    });
+    playLine(start);
   }
   function play() {
     if (!ready()) return;
     stop();
-    setStatus("");
-    const { platform, topic, index, steps } = current;
+    const { platform, topic, index } = current;
     if (!topic) {
-      nativeVoice(steps[index]);
+      playNative(0);
       return;
     }
     const audio = player = new Audio("./" + phoneAudio(platform, topic, index));
-    audio.onplaying = () => {
-      if (player === audio) setStatus("\u6B63\u5728\u6717\u8BFB\u8FD9\u4E00\u6B65");
+    const weights = lines.map((text) => Array.from(text).length);
+    const total = weights.reduce((sum, value) => sum + value, 0);
+    audio.ontimeupdate = () => {
+      if (player !== audio || !Number.isFinite(audio.duration) || !audio.duration) return;
+      let position = audio.currentTime / audio.duration * total;
+      const index2 = weights.findIndex((weight) => {
+        position -= weight;
+        return position < 0;
+      });
+      showLine(index2 === -1 ? lines.length - 1 : index2);
     };
     audio.onended = () => {
       if (player === audio) {
         player = null;
-        setStatus("");
+        showLine(lines.length - 1);
       }
     };
     audio.play().catch(() => {
       if (player !== audio) return;
       player = null;
-      nativeVoice(steps[index]);
+      playNative(0);
     });
   }
+  function step(focus = "") {
+    stop();
+    lines = ready() ? captionLines(current.steps[current.index]) : [];
+    showLine(0);
+    render2();
+    if (focus) document.querySelector(`[data-action="phone-${focus}"]`)?.focus({ preventScroll: true });
+    if (ready() && !current.muted) play();
+  }
+  async function load(platform) {
+    const active = current = { ...current, platform, steps: [], index: 0, pending: true, error: "", clarification: "", topic: "" };
+    const topic = phoneTopic(active.question);
+    if (topic) {
+      Object.assign(active, { steps: phoneLessons[platform][topic], topic, pending: false });
+      step();
+      return;
+    }
+    step();
+    try {
+      const { phoneGuide: phoneGuide2 } = await api2({ text: active.question, history: active.history, phonePlatform: platform });
+      if (!phoneGuide2 || !Array.isArray(phoneGuide2.steps)) throw new Error("\u6CA1\u6709\u627E\u5230\u64CD\u4F5C\u6B65\u9AA4\uFF0C\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
+      Object.assign(active, phoneGuide2);
+    } catch (failure) {
+      active.error = failure.message;
+    } finally {
+      active.pending = false;
+      if (active === current && visible) step();
+    }
+  }
+  function open(question, history2) {
+    visible = true;
+    if (current?.id === question.id) {
+      step();
+      return;
+    }
+    current = { id: question.id, question: question.text, history: history2, platform: "", steps: [], index: 0, muted: false };
+    const ua = navigator.userAgent;
+    const platform = /iPhone|iPad/.test(ua) ? "iphone" : /Android/i.test(ua) ? "android" : "";
+    if (platform) void load(platform);
+    else step();
+  }
   function action(name) {
-    if (!current || !panel()) return;
+    if (!visible || !current) return;
     switch (name) {
       case "android":
       case "iphone":
@@ -1967,30 +1999,32 @@ function createPhoneGuide({ dialog: dialog2, showDialog: showDialog2, api: api2,
         void load(current.platform);
         return;
       case "change":
-        stop();
-        current = { ...current, platform: "", auto: false };
-        render2(".phone-guide-actions button");
+        current = { ...current, platform: "", steps: [], index: 0, pending: false };
+        step("android");
         return;
-      case "answer":
-        dialog2.close();
-        setTimeout(() => document.getElementById("message-input")?.focus(), 0);
+      case "end":
+        close();
+        render2();
         return;
       case "listen":
-        current.auto = true;
-        render2('[data-action="phone-listen"]');
-        play();
+        current.muted = false;
+        step("listen");
         return;
       case "mute":
         stop();
-        voiceStatus = "";
-        current.auto = false;
-        render2('[data-action="phone-listen"]');
+        current.muted = true;
+        showLine(0);
+        render2();
+        return;
+      case "more":
+        if (lineIndex + 1 < lines.length) showLine(lineIndex + 1);
+        render2();
         return;
       case "next":
-        current.index++;
+        if (ready()) current.index++;
         break;
       case "previous":
-        current.index--;
+        if (current.index > 0) current.index--;
         break;
       case "restart":
         current.index = 0;
@@ -1998,17 +2032,14 @@ function createPhoneGuide({ dialog: dialog2, showDialog: showDialog2, api: api2,
       default:
         return;
     }
-    stop();
-    voiceStatus = "";
-    render2("#phone-caption");
-    if (current.auto) play();
+    step("next");
   }
   function close() {
+    visible = false;
     stop();
-    voiceStatus = "";
-    if (current) current.auto = false;
+    showLine(0);
   }
-  return { open, action, close, reset() {
+  return { open, action, controls, close, reset() {
     close();
     current = null;
   } };
@@ -2060,13 +2091,12 @@ var escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (character) =
 var records = createRecords({ paint: render, pageHeader, escapeHtml, icon, showDialog, closeDialog: () => dialog.close(), notify, isGuest: () => account?.guest });
 var electricity = createElectricityCards({ api, escapeHtml, pageHeader, loginAction, render, speak, stopSpeech, account: () => account, family: () => family });
 var phoneGuide = createPhoneGuide({
-  dialog,
-  showDialog,
+  caption: document.querySelector("#phone-caption"),
   api: askAssistant,
   esc: escapeHtml,
+  render,
   speak: (text, status2) => speak(text, state.speechRate, true, status2),
-  stopSpeech,
-  getAccount: () => account
+  stopSpeech
 });
 var state = newState();
 var route = readRoute();
@@ -2476,7 +2506,7 @@ function chatScreen(mode) {
     </div></main>`;
 }
 function phoneGuideButton(questionId) {
-  return `<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
+  return phoneGuide.controls(questionId) || `<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
 }
 function renderMessage(message) {
   const tools = [];
@@ -3697,7 +3727,6 @@ document.addEventListener("keydown", (event) => {
   updatePin(event.target.form, { x: adjust(x, dx), y: adjust(y, dy) });
 });
 dialog.addEventListener("close", () => {
-  if (!dialog.open) phoneGuide.close();
   if (returnFocus?.isConnected) returnFocus.focus();
   returnFocus = null;
 });
@@ -3741,6 +3770,7 @@ function enterScreen(focus = false) {
 window.addEventListener("hashchange", () => {
   if (dialog.open) dialog.close();
   recognition?.abort();
+  phoneGuide.close();
   stopSpeech();
   route = readRoute();
   if (!cloudSite2 && location.hash === "#/legacy" && !authBusy) {

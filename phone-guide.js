@@ -1,5 +1,3 @@
-const labels = { font: '放大手机字', wifi: '连接无线网' };
-
 export const phoneLessons = {
   android: {
     font: ['请打开手机里的“设置”。', '在设置里搜索“字体大小”，点开对应的结果。', '把字号滑块往右移，直到字能看清。'],
@@ -12,6 +10,8 @@ export const phoneLessons = {
 };
 
 export const phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
+const androidTrial = 'https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk';
+const androidLaunch = `intent://phone/font#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
 
 export function phoneTopic(question) {
   const text = question.trim().replace(/[\s？?。，！!\-]/g, '').toLowerCase();
@@ -21,160 +21,180 @@ export function phoneTopic(question) {
   return '';
 }
 
-export function createPhoneGuide({ dialog, showDialog, api, esc, speak, stopSpeech, getAccount }) {
+export function captionLines(text) {
+  const phrases = text.match(/[^，。！？；、]+[，。！？；、]*|[，。！？；、]+/g) ?? [];
+  const result = [];
+  for (const phrase of phrases) {
+    const characters = Array.from(phrase);
+    while (characters.length) {
+      const chunk = characters.splice(0, 13).join('').trim();
+      const last = result.at(-1);
+      if (last && Array.from(last + chunk).length <= 13) result[result.length - 1] += chunk;
+      else if (chunk) result.push(chunk);
+    }
+  }
+  return result;
+}
+
+export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render }) {
   let current;
+  let visible = false;
   let player;
-  let spoken = false;
-  let voiceStatus = '';
+  let narration;
+  let lines = [];
+  let lineIndex = 0;
+  const line = caption.querySelector('span');
+
+  function showLine(index) {
+    lineIndex = index;
+    const text = lines[index] ?? '';
+    if (line.textContent !== text) line.textContent = text;
+    caption.hidden = !visible || !text;
+  }
 
   function stop() {
-    const active = player;
+    const audio = player;
     player = null;
-    if (active) active.pause();
-    if (spoken) {
-      spoken = false;
+    audio?.pause();
+    if (narration) {
+      narration = null;
       stopSpeech();
     }
   }
 
-  const button = (name, label, style = 'quiet') => `<button type="button" class="button ${style}" data-action="phone-${name}">${label}</button>`;
-  const ready = () => current?.steps?.length && current.index < current.steps.length;
-  const panel = () => dialog.querySelector('.phone-guide');
+  const button = (name, label) => `<button type="button" class="text-button" data-action="phone-${name}">${label}</button>`;
+  const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
 
-  function setStatus(text) {
-    voiceStatus = text;
-    const target = panel()?.querySelector('.phone-voice-status');
-    if (target) target.textContent = text;
+  function controls(id) {
+    if (!visible || current?.id !== id) return '';
+    const { platform, pending, error, steps, index, clarification, muted } = current;
+    let content;
+    if (!platform) content = button('android', '安卓手机') + button('iphone', '苹果手机');
+    else if (pending) content = '<span role="status">正在准备步骤…</span>';
+    else if (error) content = `<span role="alert">${esc(error)}</span>${button('retry', '重试')}`;
+    else if (!steps.length) content = `<span role="status">${esc(clarification)}</span>`;
+    else if (index >= steps.length) content = '<span role="status">已完成</span>' + button('restart', '再来一次');
+    else content = (index ? button('previous', '上一步') : '') + button('listen', '重听')
+      + (muted ? '' : button('mute', '关声音')) + (muted && lineIndex < lines.length - 1 ? button('more', '下一句') : '')
+      + button('next', index + 1 < steps.length ? '下一步' : '做完了');
+    const trial = platform === 'android' && current.topic === 'font' && /Android/i.test(navigator.userAgent)
+      ? `<a class="text-button" href="${androidLaunch}">安卓光点引导（试用）</a><a class="text-button" href="${androidTrial}">下载试用版</a>` : '';
+    return `<div class="phone-guide-controls" aria-label="字幕和进度">${content}
+      ${platform && !pending ? button('change', '换手机') : ''}${button('end', '结束')}${trial}</div>`;
   }
 
-  function render(focus = '') {
-    const { platform, steps, index, clarification, pending, error, title, auto } = current;
-    let body;
-    if (!platform) {
-      body = `<h3>您用的是哪种手机？</h3><div class="phone-guide-actions">${button('android', '安卓手机', '')}${button('iphone', '苹果手机', '')}</div>`;
-    } else if (pending) {
-      body = '<p role="status">正在准备手机操作步骤…</p>';
-    } else if (error) {
-      body = `<p class="form-error" role="alert">${esc(error)}</p><div class="phone-guide-actions">${button('retry', '再试一次', '')}${button('change', '换一种手机')}</div>`;
-    } else if (!steps.length) {
-      body = `<p class="phone-caption">${esc(clarification)}</p>${button('answer', '回去补充问题', '')}`;
-    } else if (index >= steps.length) {
-      body = `<h3>已经看完了</h3><div class="phone-guide-actions">${button('restart', '从头再听')}${button('answer', '返回助手', '')}</div>`;
-    } else {
-      body = `<p class="phone-step-count">${esc(title)} · 第 ${index + 1} 步，共 ${steps.length} 步</p>
-        <p class="phone-caption" id="phone-caption" tabindex="-1">${esc(steps[index])}</p>
-        <div class="phone-guide-actions">${button('listen', auto ? '再听一遍' : '听这一步', '')}${auto ? button('mute', '关闭声音') : ''}</div>
-        <p class="phone-voice-status" role="status">${esc(voiceStatus)}</p>
-        <div class="phone-guide-actions phone-step-nav">${index ? button('previous', '上一步') : ''}${button('next', index + 1 < steps.length ? '下一步' : '我做完了', 'primary')}</div>
-        <p class="device-help">可以先去手机里操作，回到禾伴会留在这一步。</p>${button('change', '换一种手机')}`;
+  function playNative(start) {
+    const active = narration = {};
+    function playLine(index) {
+      if (narration !== active || !ready()) return;
+      showLine(index);
+      speak(lines[index], (status) => {
+        if (narration !== active) return;
+        if (status === 'ended' && index + 1 < lines.length) playLine(index + 1);
+        else if (status === 'ended' || status === 'error') {
+          narration = null;
+          if (status === 'error') { current.muted = true; render(); }
+        }
+      });
     }
-    const markup = `<div class="phone-guide">${body}</div>`;
-    if (dialog.open && panel()) panel().outerHTML = markup;
-    else showDialog('听着一步一步做', markup);
-    if (focus) panel()?.querySelector(focus)?.focus({ preventScroll: true });
-  }
-
-  function open(question, history) {
-    if (current?.id !== question.id) {
-      stop();
-      voiceStatus = '';
-      current = { id: question.id, question: question.text, history, owner: getAccount(), platform: '', steps: [], index: 0, auto: false };
-    }
-    render();
-  }
-
-  async function load(platform) {
-    stop();
-    voiceStatus = '';
-    const active = current = { ...current, platform, steps: [], index: 0, auto: false, pending: true, error: '', clarification: '' };
-    const topic = phoneTopic(active.question);
-    if (topic) {
-      Object.assign(active, { steps: phoneLessons[platform][topic], title: labels[topic], topic, pending: false });
-      render('#phone-caption');
-      return;
-    }
-    active.topic = '';
-    render();
-    try {
-      const { phoneGuide } = await api({ text: active.question, history: active.history, phonePlatform: platform });
-      if (!phoneGuide || !Array.isArray(phoneGuide.steps)) throw new Error('这次没有读到手机操作步骤，请再试一次。');
-      Object.assign(active, phoneGuide);
-    } catch (error) {
-      active.error = error.message;
-    } finally {
-      active.pending = false;
-      if (active === current && active.owner === getAccount() && dialog.open && panel()) render('#phone-caption');
-    }
-  }
-
-  function nativeVoice(text) {
-    spoken = true;
-    speak(text, (status) => {
-      if (!spoken) return;
-      if (status === 'error') setStatus('没有听到声音时，可以先看大字，或用手机自带的浏览器打开禾伴。');
-      else setStatus(status === 'playing' ? '正在朗读这一步' : '');
-      if (status !== 'playing') spoken = false;
-    });
+    playLine(start);
   }
 
   function play() {
     if (!ready()) return;
     stop();
-    setStatus('');
-    const { platform, topic, index, steps } = current;
-    if (!topic) { nativeVoice(steps[index]); return; }
+    const { platform, topic, index } = current;
+    if (!topic) { playNative(0); return; }
     const audio = player = new Audio('./' + phoneAudio(platform, topic, index));
-    audio.onplaying = () => { if (player === audio) setStatus('正在朗读这一步'); };
-    audio.onended = () => { if (player === audio) { player = null; setStatus(''); } };
+    const weights = lines.map((text) => Array.from(text).length);
+    const total = weights.reduce((sum, value) => sum + value, 0);
+    audio.ontimeupdate = () => {
+      if (player !== audio || !Number.isFinite(audio.duration) || !audio.duration) return;
+      let position = audio.currentTime / audio.duration * total;
+      const index = weights.findIndex((weight) => { position -= weight; return position < 0; });
+      showLine(index === -1 ? lines.length - 1 : index);
+    };
+    audio.onended = () => { if (player === audio) { player = null; showLine(lines.length - 1); } };
     audio.play().catch(() => {
       if (player !== audio) return;
       player = null;
-      nativeVoice(steps[index]);
+      playNative(0);
     });
   }
 
+  function step(focus = '') {
+    stop();
+    lines = ready() ? captionLines(current.steps[current.index]) : [];
+    showLine(0);
+    render();
+    if (focus) document.querySelector(`[data-action="phone-${focus}"]`)?.focus({ preventScroll: true });
+    if (ready() && !current.muted) play();
+  }
+
+  async function load(platform) {
+    const active = current = { ...current, platform, steps: [], index: 0, pending: true, error: '', clarification: '', topic: '' };
+    const topic = phoneTopic(active.question);
+    if (topic) {
+      Object.assign(active, { steps: phoneLessons[platform][topic], topic, pending: false });
+      step();
+      return;
+    }
+    step();
+    try {
+      const { phoneGuide } = await api({ text: active.question, history: active.history, phonePlatform: platform });
+      if (!phoneGuide || !Array.isArray(phoneGuide.steps)) throw new Error('没有找到操作步骤，请再试一次。');
+      Object.assign(active, phoneGuide);
+    } catch (failure) { active.error = failure.message; }
+    finally {
+      active.pending = false;
+      if (active === current && visible) step();
+    }
+  }
+
+  function open(question, history) {
+    visible = true;
+    if (current?.id === question.id) { step(); return; }
+    current = { id: question.id, question: question.text, history, platform: '', steps: [], index: 0, muted: false };
+    const ua = navigator.userAgent;
+    const platform = /iPhone|iPad/.test(ua) ? 'iphone' : /Android/i.test(ua) ? 'android' : '';
+    if (platform) void load(platform);
+    else step();
+  }
+
   function action(name) {
-    if (!current || !panel()) return;
+    if (!visible || !current) return;
     switch (name) {
       case 'android':
       case 'iphone': void load(name); return;
       case 'retry': void load(current.platform); return;
       case 'change':
-        stop();
-        current = { ...current, platform: '', auto: false };
-        render('.phone-guide-actions button');
+        current = { ...current, platform: '', steps: [], index: 0, pending: false };
+        step('android');
         return;
-      case 'answer':
-        dialog.close();
-        setTimeout(() => document.getElementById('message-input')?.focus(), 0);
-        return;
-      case 'listen':
-        current.auto = true;
-        render('[data-action="phone-listen"]');
-        play();
-        return;
+      case 'end': close(); render(); return;
+      case 'listen': current.muted = false; step('listen'); return;
       case 'mute':
         stop();
-        voiceStatus = '';
-        current.auto = false;
-        render('[data-action="phone-listen"]');
+        current.muted = true;
+        showLine(0);
+        render();
         return;
-      case 'next': current.index++; break;
-      case 'previous': current.index--; break;
+      case 'more':
+        if (lineIndex + 1 < lines.length) showLine(lineIndex + 1);
+        render();
+        return;
+      case 'next': if (ready()) current.index++; break;
+      case 'previous': if (current.index > 0) current.index--; break;
       case 'restart': current.index = 0; break;
       default: return;
     }
-    stop();
-    voiceStatus = '';
-    render('#phone-caption');
-    if (current.auto) play();
+    step('next');
   }
 
   function close() {
+    visible = false;
     stop();
-    voiceStatus = '';
-    if (current) current.auto = false;
+    showLine(0);
   }
-
-  return { open, action, close, reset() { close(); current = null; } };
+  return { open, action, controls, close, reset() { close(); current = null; } };
 }

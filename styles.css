@@ -515,21 +515,23 @@ body:has(.app-nav) .toast { bottom: calc(var(--nav-height) + 10px); }
 .electricity-reader .photo-board { margin: 0; }
 
 .phone-offer { min-height: 48px; text-align: left; }
-.phone-guide { display: grid; gap: 12px; }
-.phone-guide h3, .phone-guide p { margin: 0; }
-.phone-guide-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.phone-guide-actions .button { min-height: 48px; flex: 1 1 108px; }
-.phone-guide > .button { justify-self: start; }
-.phone-step-count { color: var(--muted); font-weight: 700; }
-.phone-caption {
-  padding: 16px 14px;
-  border-radius: 14px;
-  background: #eef2ff;
-  color: #192746;
-  font-size: 1.55rem;
+.phone-guide-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; }
+.phone-guide-controls .text-button { min-height: 44px; padding-inline: 4px; }
+.phone-caption-line {
+  position: sticky;
+  z-index: 6;
+  inset-block-start: env(safe-area-inset-top, 0px);
+  width: min(100%, 640px);
+  margin-inline: auto;
+  padding: 4px 8px;
+  color: #182747;
+  background: var(--page-top, #eef3ff);
+  font-size: 1.125rem;
   font-weight: 750;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
+  line-height: 1.45;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
 }
-.phone-voice-status { color: var(--muted); }
-.phone-voice-status:empty { display: none; }
+.phone-caption-line span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.phone-caption-line[hidden] { display: none; }
