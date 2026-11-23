@@ -1838,6 +1838,11 @@ var phoneLessons = {
 var phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
 var androidTrial = "https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.2";
 var launchAndroid = (path2) => `intent://phone/${path2}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
+function quotedTapTarget(instruction) {
+  if (/(?:不要|不用|别|不必|禁止)[^，。；]{0,6}(?:点|按)/.test(instruction)) return "";
+  const taps = [...instruction.matchAll(/(?:点击|轻点|点按|点)(?:[击看开进]|(?:屏幕|页面)?(?:上方|下方|顶部|底部|左上角|右上角|左下角|右下角|左侧|右侧|中间)的?)?\s*[“「]([^”」]{1,28})[”」]/g)];
+  return taps.length === 1 ? taps[0][1].trim() : "";
+}
 function androidGuidePath(guide) {
   if (guide.topic === "font") return "font";
   if (!guide.steps?.length) return "";
@@ -1847,7 +1852,7 @@ function androidGuidePath(guide) {
     app: app2,
     steps: guide.steps.slice(0, 5).map((text, i) => ({
       text,
-      target: guide.targets?.[i] || "",
+      target: guide.targets?.[i] || quotedTapTarget(text),
       ...guide.apps?.[i] ? { app: guide.apps[i] } : {}
     }))
   };

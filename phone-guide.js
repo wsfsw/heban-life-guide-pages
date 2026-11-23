@@ -13,6 +13,12 @@ export const phoneAudio = (platform, topic, index) => `assets/phone-${platform}-
 const androidTrial = 'https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.2';
 const launchAndroid = (path) => `intent://phone/${path}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidTrial)};end`;
 
+function quotedTapTarget(instruction) {
+  if (/(?:不要|不用|别|不必|禁止)[^，。；]{0,6}(?:点|按)/.test(instruction)) return '';
+  const taps = [...instruction.matchAll(/(?:点击|轻点|点按|点)(?:[击看开进]|(?:屏幕|页面)?(?:上方|下方|顶部|底部|左上角|右上角|左下角|右下角|左侧|右侧|中间)的?)?\s*[“「]([^”」]{1,28})[”」]/g)];
+  return taps.length === 1 ? taps[0][1].trim() : '';
+}
+
 export function androidGuidePath(guide) {
   if (guide.topic === 'font') return 'font';
   if (!guide.steps?.length) return '';
@@ -20,7 +26,7 @@ export function androidGuidePath(guide) {
   const plan = {
     title: guide.title || (guide.topic === 'wifi' ? '连接无线网' : '手机操作引导'),
     app,
-    steps: guide.steps.slice(0, 5).map((text, i) => ({ text, target: guide.targets?.[i] || '',
+    steps: guide.steps.slice(0, 5).map((text, i) => ({ text, target: guide.targets?.[i] || quotedTapTarget(text),
       ...(guide.apps?.[i] ? { app: guide.apps[i] } : {}) })),
   };
   return 'steps?plan=' + encodeURIComponent(JSON.stringify(plan));
