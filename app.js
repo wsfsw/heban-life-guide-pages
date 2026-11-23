@@ -487,26 +487,70 @@ function unsyncedCloud() {
 }
 
 // assistant-client.js
-async function askAssistant(input) {
-  const cloudSite2 = document.querySelector('meta[name="heban-cloud-site"]')?.content;
+var cloudSite = () => document.querySelector('meta[name="heban-cloud-site"]')?.content;
+function directAssistantUrl(route2) {
+  const site = cloudSite();
+  return site ? new URL(`#/${route2}`, site).href : "";
+}
+function connectionError(message) {
+  return Object.assign(new Error(message), { canOpenDirect: true });
+}
+function requestTimeout(milliseconds) {
   const controller = new AbortController();
-  const timer2 = setTimeout(() => controller.abort(), 32e3);
+  const timer2 = setTimeout(() => controller.abort(), milliseconds);
+  return { signal: controller.signal, clear: () => clearTimeout(timer2) };
+}
+async function diagnoseConnection(endpoint) {
+  if (navigator.onLine === false) return new Error("\u624B\u673A\u6CA1\u6709\u8FDE\u4E0A\u7F51\u7EDC\u3002\u8FDE\u4E0A Wi-Fi \u6216\u6253\u5F00\u79FB\u52A8\u6570\u636E\u540E\uFF0C\u518D\u8BD5\u4E00\u6B21\u3002");
+  const timeout = requestTimeout(4e3);
+  let health;
   try {
-    const response = await fetch(new URL("/api/assistant", cloudSite2 || location.origin), {
+    const response = await fetch(endpoint, {
+      credentials: "omit",
+      cache: "no-store",
+      signal: timeout.signal
+    });
+    if (response.ok) health = await response.json();
+    if (response.status === 403) return connectionError("\u8FD9\u4E2A\u9875\u9762\u6682\u65F6\u4E0D\u80FD\u8FDE\u63A5\u52A9\u624B\u3002\u8BF7\u91CD\u65B0\u6253\u5F00\u79BE\u4F34\u518D\u8BD5\u3002");
+  } catch {
+  } finally {
+    timeout.clear();
+  }
+  if (health?.online === true) return connectionError("\u80FD\u8FDE\u4E0A\u52A9\u624B\uFF0C\u4F46\u8FD9\u6B21\u8BF7\u6C42\u6CA1\u5B8C\u6210\u3002\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
+  if (health?.online === false) return new Error("\u52A9\u624B\u670D\u52A1\u6682\u65F6\u4E0D\u53EF\u7528\u3002\u8BF7\u7A0D\u540E\u518D\u8BD5\u3002");
+  return connectionError("\u5F53\u524D\u7F51\u7EDC\u6682\u65F6\u8FDE\u4E0D\u4E0A\u52A9\u624B\u3002\u53EF\u4EE5\u6362 Wi-Fi \u6216\u79FB\u52A8\u7F51\u7EDC\u518D\u8BD5\u3002");
+}
+function responseError(response, result) {
+  if (response.status === 403) return connectionError("\u8FD9\u4E2A\u9875\u9762\u6682\u65F6\u4E0D\u80FD\u8FDE\u63A5\u52A9\u624B\u3002\u8BF7\u91CD\u65B0\u6253\u5F00\u79BE\u4F34\u518D\u8BD5\u3002");
+  if (typeof result?.error === "string" && result.error.trim()) return new Error(result.error);
+  if (response.status === 429) return new Error("\u73B0\u5728\u4F7F\u7528\u52A9\u624B\u7684\u4EBA\u8F83\u591A\u3002\u8BF7\u7A0D\u540E\u518D\u8BD5\u3002");
+  if (response.status === 504) return new Error("\u52A9\u624B\u56DE\u7B54\u7B49\u5F97\u592A\u4E45\u4E86\u3002\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
+  return new Error("\u52A9\u624B\u670D\u52A1\u6682\u65F6\u4E0D\u53EF\u7528\u3002\u8BF7\u7A0D\u540E\u518D\u8BD5\u3002");
+}
+async function askAssistant(input) {
+  const site = cloudSite();
+  const endpoint = new URL("/api/assistant", site || location.origin);
+  const timeout = requestTimeout(32e3);
+  let response;
+  let result;
+  try {
+    response = await fetch(endpoint, {
       method: "POST",
       credentials: "omit",
-      headers: { "Content-Type": cloudSite2 ? "text/plain;charset=UTF-8" : "application/json" },
+      headers: { "Content-Type": site ? "text/plain;charset=UTF-8" : "application/json" },
       body: JSON.stringify(input),
-      signal: controller.signal
-    }).catch(() => {
-      throw new Error(controller.signal.aborted ? "\u8FD9\u6B21\u7B49\u5F85\u8D85\u65F6\u4E86\uFF0C\u60A8\u53EF\u4EE5\u91CD\u8BD5\u3002" : "\u6CA1\u80FD\u8FDE\u63A5\u5230\u5728\u7EBF\u52A9\u624B\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u540E\u91CD\u8BD5\u3002");
+      signal: timeout.signal
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "\u5728\u7EBF\u52A9\u624B\u6682\u65F6\u8FDE\u4E0D\u4E0A\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5\u3002");
-    return result;
+    result = await response.json();
+  } catch {
+    if (timeout.signal.aborted) throw new Error("\u52A9\u624B\u56DE\u7B54\u7B49\u5F97\u592A\u4E45\u4E86\u3002\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
+    if (!response) throw await diagnoseConnection(endpoint);
+    if (response.ok) throw connectionError("\u52A9\u624B\u8FD4\u56DE\u7684\u5185\u5BB9\u6CA1\u80FD\u8BFB\u5B8C\u6574\u3002\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
   } finally {
-    clearTimeout(timer2);
+    timeout.clear();
   }
+  if (!response.ok) throw responseError(response, result);
+  return result;
 }
 
 // records.js
@@ -588,8 +632,9 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
       const saving = mode === "saving";
       const analyzing = mode === "analyzing";
       const disabled = mode !== "review" ? "disabled" : "";
+      const direct = error?.canOpenDirect ? directAssistantUrl(`capture/${scene}`) : "";
       body = `<img class="capture-frame" src="${photo}" alt="\u60A8\u9009\u7684\u7167\u7247">
-        <form class="capture-form" data-form="scene-record">
+        <form class="capture-form" id="capture-review" data-form="scene-record">
           <label for="record-scene">\u7167\u7247\u662F\u5173\u4E8E\u4EC0\u4E48\u7684\uFF1F</label>
           <select id="record-scene" name="scene" ${disabled}>
             ${Object.entries(scenes).map(([key, item]) => `<option value="${key}" ${key === scene ? "selected" : ""}>${item.name}</option>`).join("")}
@@ -602,7 +647,9 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
           <button id="capture-save" class="button quiet" type="submit" value="save" ${disabled}>${saving ? "\u6B63\u5728\u4FDD\u5B58\u2026" : "\u4FDD\u5B58\u7167\u7247"}</button>
           <button class="button quiet" type="button" data-action="capture-reset" ${disabled}>\u91CD\u62CD\u6216\u6362\u4E00\u5F20</button></div>
         </form>
-        ${error ? `<p class="capture-error" id="capture-action-error" role="alert" tabindex="-1">${escapeHtml2(error)}</p>` : ""}
+        ${error ? `<div class="capture-error"><p id="capture-action-error" role="alert" tabindex="-1">${escapeHtml2(error.message ?? error)}</p>
+          ${error instanceof Error ? `<div class="capture-actions"><button class="button quiet" type="submit" form="capture-review" value="analyze">\u518D\u8BD5\u4E00\u6B21</button>
+            ${direct ? `<a class="button quiet" href="${escapeHtml2(direct)}" target="_blank" rel="noopener">\u6253\u5F00\u62CD\u7167\u52A9\u624B</a>` : ""}</div>` : ""}</div>` : ""}
         ${analysisPanel(analysis, analyzing)}`;
     } else if (mode === "opening" || mode === "reading") {
       body = `<p class="capture-status" role="status">${mode === "opening" ? "\u6B63\u5728\u6253\u5F00\u76F8\u673A\uFF0C\u8BF7\u7559\u610F\u76F8\u673A\u6743\u9650\u63D0\u793A\u3002" : "\u6B63\u5728\u8BFB\u53D6\u7167\u7247\u2026"}</p>
@@ -737,7 +784,7 @@ function createRecords({ paint, pageHeader: pageHeader2, escapeHtml: escapeHtml2
       if (!analysis?.observation) throw new Error("\u52A9\u624B\u8FD9\u6B21\u6CA1\u6709\u770B\u6E05\u753B\u9762\uFF0C\u8BF7\u518D\u8BD5\u4E00\u6B21\u3002");
       current.analysis = analysis;
     } catch (error) {
-      current.error = error.message;
+      current.error = error;
     } finally {
       current.mode = "review";
       const target = current.error ? "#capture-action-error" : "#capture-analysis";
@@ -1253,7 +1300,7 @@ function cleanShortcut(source) {
 
 // app.js
 var app = document.querySelector("#app");
-var cloudSite = document.querySelector('meta[name="heban-cloud-site"]')?.content;
+var cloudSite2 = document.querySelector('meta[name="heban-cloud-site"]')?.content;
 var dialog = document.querySelector("#dialog");
 var status = document.querySelector("#status");
 var accountBar = document.querySelector("#account-bar");
@@ -1321,7 +1368,7 @@ function accessPreference(value) {
   }
 }
 function loginAction(label = "\u7528\u90AE\u7BB1\u767B\u5F55", classes = "button") {
-  return cloudSite ? `<a class="${classes}" href="${escapeHtml(cloudSite)}">\u6253\u5F00\u4E91\u7AEF\u7248</a>` : `<button class="${classes}" data-action="show-login" type="button">${label}</button>`;
+  return cloudSite2 ? `<a class="${classes}" href="${escapeHtml(cloudSite2)}">\u6253\u5F00\u4E91\u7AEF\u7248</a>` : `<button class="${classes}" data-action="show-login" type="button">${label}</button>`;
 }
 function updateCloudStatus(current, detail = "") {
   cloudStatus = current;
@@ -1573,6 +1620,7 @@ function chatScreen(mode) {
   const config = chatConfig[mode];
   const waiting = pendingReplies.get(mode) === account;
   const failure = failedReplies.get(mode);
+  const direct = failure?.error.canOpenDirect && failure.account === account ? directAssistantUrl(mode) : "";
   const interest = mode === "chat" ? state.interests.split(/[、，,\s]+/).find(Boolean) : "";
   const greeting = config.greeting.replace("{name}", state.persona) + (interest ? `\u4E5F\u53EF\u4EE5\u804A\u804A\u60A8\u559C\u6B22\u7684\u300C${interest.slice(0, 24)}\u300D\u3002` : "");
   const messages = [{ role: "assistant", text: greeting }, ...state.messages[mode]];
@@ -1586,8 +1634,9 @@ function chatScreen(mode) {
       </div>`}
     <div class="message-list" role="log" aria-label="\u804A\u5929\u8BB0\u5F55">${messages.map(renderMessage).join("")}
       ${waiting ? '<p class="assistant-wait" role="status">\u79BE\u4F34\u6B63\u5728\u56DE\u7B54\u2026</p>' : ""}
-      ${failure?.account === account ? `<div class="assistant-retry" role="status"><p>${escapeHtml(failure.error)}</p>
+      ${failure?.account === account ? `<div class="assistant-retry"><p role="alert">${escapeHtml(failure.error.message)}</p>
         <button type="button" class="button quiet" data-action="assistant-retry">\u518D\u95EE\u4E00\u6B21</button>
+        ${direct ? `<a class="button quiet" href="${escapeHtml(direct)}" target="_blank" rel="noopener">\u76F4\u63A5\u6253\u5F00\u52A9\u624B</a>` : ""}
         ${mode === "ask" ? '<a class="section-link" href="#/guides">\u5148\u770B\u64CD\u4F5C\u6B65\u9AA4</a>' : ""}</div>` : ""}
     </div>
     <div class="composer-area">
@@ -1864,7 +1913,7 @@ function guideInteraction(action, button) {
 }
 function connectionsScreen() {
   if (account.guest) return `${pageHeader("\u5BB6\u5EAD\u8FDE\u63A5", "family")}<main class="surface connections">
-    <p class="empty-card">${cloudSite ? "\u8BF7\u5728\u4E91\u7AEF\u7248\u767B\u5F55\u540E\u8FDE\u63A5\u5BB6\u4EBA\uFF0C\u5206\u4EAB\u95EE\u9898\u548C\u8BBE\u5907\u5361\u3002" : "\u767B\u5F55\u540E\u53EF\u4EE5\u8FDE\u63A5\u5BB6\u4EBA\uFF0C\u5206\u4EAB\u95EE\u9898\u548C\u8BBE\u5907\u5361\u3002"}</p>
+    <p class="empty-card">${cloudSite2 ? "\u8BF7\u5728\u4E91\u7AEF\u7248\u767B\u5F55\u540E\u8FDE\u63A5\u5BB6\u4EBA\uFF0C\u5206\u4EAB\u95EE\u9898\u548C\u8BBE\u5907\u5361\u3002" : "\u767B\u5F55\u540E\u53EF\u4EE5\u8FDE\u63A5\u5BB6\u4EBA\uFF0C\u5206\u4EAB\u95EE\u9898\u548C\u8BBE\u5907\u5361\u3002"}</p>
     ${loginAction()}
   </main>`;
   const links = family?.links ?? [];
@@ -1925,7 +1974,7 @@ function joinFamilyDialog() {
 }
 async function openShareItem(kind, id) {
   if (account.guest) {
-    showDialog("\u767B\u5F55\u540E\u5206\u4EAB", `<p class="form-help">${cloudSite ? "\u53EF\u4EE5\u5728\u4E91\u7AEF\u7248\u4E0E\u5BB6\u4EBA\u8FDE\u63A5\u5E76\u5206\u4EAB\u95EE\u9898\u6216\u8BBE\u5907\u5361\u3002" : "\u767B\u5F55\u540E\u53EF\u4EE5\u628A\u8FD9\u6761\u5185\u5BB9\u5206\u4EAB\u7ED9\u5DF2\u8FDE\u63A5\u7684\u5BB6\u4EBA\u3002"}</p>${loginAction("\u7528\u90AE\u7BB1\u767B\u5F55", "button wide")}`);
+    showDialog("\u767B\u5F55\u540E\u5206\u4EAB", `<p class="form-help">${cloudSite2 ? "\u53EF\u4EE5\u5728\u4E91\u7AEF\u7248\u4E0E\u5BB6\u4EBA\u8FDE\u63A5\u5E76\u5206\u4EAB\u95EE\u9898\u6216\u8BBE\u5907\u5361\u3002" : "\u767B\u5F55\u540E\u53EF\u4EE5\u628A\u8FD9\u6761\u5185\u5BB9\u5206\u4EAB\u7ED9\u5DF2\u8FDE\u63A5\u7684\u5BB6\u4EBA\u3002"}</p>${loginAction("\u7528\u90AE\u7BB1\u767B\u5F55", "button wide")}`);
     return;
   }
   const item = kind === "device" ? state.deviceGuides.find((entry) => entry.id === id) : state.messages.ask.find((entry) => entry.role === "user" && entry.id === id);
@@ -2058,7 +2107,7 @@ async function startCloud(mode) {
 async function boot() {
   let locked = false;
   try {
-    if (cloudSite) {
+    if (cloudSite2) {
       await startCloud("guest");
       return;
     }
@@ -2259,7 +2308,7 @@ async function sendMessage(text, retry = false) {
       reply = (await askAssistant({ text: input, history: history2, style: state.persona })).answer;
       if (!reply) throw new Error("\u6CA1\u6709\u6536\u5230\u56DE\u590D\u3002");
     } catch (error) {
-      failure = error.message;
+      failure = error;
     } finally {
       if (pendingReplies.get(mode) === active) pendingReplies.delete(mode);
     }
@@ -2279,7 +2328,7 @@ async function sendMessage(text, retry = false) {
     document.querySelector(".message:last-child")?.scrollIntoView({ block: "nearest" });
     document.querySelector("#message-input")?.focus({ preventScroll: true });
   }
-  if (state.listen) speak(failure || reply);
+  if (state.listen) speak(failure?.message || reply);
 }
 function startVoice(button) {
   if (!voices) {
@@ -2699,7 +2748,7 @@ window.addEventListener("hashchange", () => {
   recognition?.abort();
   window.speechSynthesis?.cancel();
   route = readRoute();
-  if (!cloudSite && location.hash === "#/legacy" && !authBusy) {
+  if (!cloudSite2 && location.hash === "#/legacy" && !authBusy) {
     void boot();
     return;
   }
@@ -2724,5 +2773,5 @@ window.addEventListener("beforeunload", (event) => {
 setInterval(() => {
   if (account) checkReminders();
 }, 1e4);
-if (!cloudSite) cloudEntry();
+if (!cloudSite2) cloudEntry();
 void boot();

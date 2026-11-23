@@ -1,7 +1,7 @@
 import { api, photoUrl } from './cloud.js';
 import { compressPhoto, readDevicePhoto } from './devices.js';
 import { formatWhen } from './logic.js';
-import { askAssistant } from './assistant-client.js';
+import { askAssistant, directAssistantUrl } from './assistant-client.js';
 
 const scenes = {
   parcel: { name: '快递和取件', guide: 'guide/parcel', action: '看看怎么取快递' },
@@ -84,8 +84,9 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
       const saving = mode === 'saving';
       const analyzing = mode === 'analyzing';
       const disabled = mode !== 'review' ? 'disabled' : '';
+      const direct = error?.canOpenDirect ? directAssistantUrl(`capture/${scene}`) : '';
       body = `<img class="capture-frame" src="${photo}" alt="您选的照片">
-        <form class="capture-form" data-form="scene-record">
+        <form class="capture-form" id="capture-review" data-form="scene-record">
           <label for="record-scene">照片是关于什么的？</label>
           <select id="record-scene" name="scene" ${disabled}>
             ${Object.entries(scenes).map(([key, item]) => `<option value="${key}" ${key === scene ? 'selected' : ''}>${item.name}</option>`).join('')}
@@ -98,7 +99,9 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
           <button id="capture-save" class="button quiet" type="submit" value="save" ${disabled}>${saving ? '正在保存…' : '保存照片'}</button>
           <button class="button quiet" type="button" data-action="capture-reset" ${disabled}>重拍或换一张</button></div>
         </form>
-        ${error ? `<p class="capture-error" id="capture-action-error" role="alert" tabindex="-1">${escapeHtml(error)}</p>` : ''}
+        ${error ? `<div class="capture-error"><p id="capture-action-error" role="alert" tabindex="-1">${escapeHtml(error.message ?? error)}</p>
+          ${error instanceof Error ? `<div class="capture-actions"><button class="button quiet" type="submit" form="capture-review" value="analyze">再试一次</button>
+            ${direct ? `<a class="button quiet" href="${escapeHtml(direct)}" target="_blank" rel="noopener">打开拍照助手</a>` : ''}</div>` : ''}</div>` : ''}
         ${analysisPanel(analysis, analyzing)}`;
     } else if (mode === 'opening' || mode === 'reading') {
       body = `<p class="capture-status" role="status">${mode === 'opening' ? '正在打开相机，请留意相机权限提示。' : '正在读取照片…'}</p>
@@ -245,7 +248,7 @@ export function createRecords({ paint, pageHeader, escapeHtml, icon, showDialog,
       if (!analysis?.observation) throw new Error('助手这次没有看清画面，请再试一次。');
       current.analysis = analysis;
     } catch (error) {
-      current.error = error.message;
+      current.error = error;
     } finally {
       current.mode = 'review';
       const target = current.error ? '#capture-action-error' : '#capture-analysis';
