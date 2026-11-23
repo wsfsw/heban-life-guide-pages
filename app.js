@@ -27,8 +27,14 @@ function newState() {
     deviceGuides: [],
     guideRuns: {},
     shortcuts: [],
+    hiddenShortcuts: [],
+    familyVisibility: [],
     messages: { chat: [], ask: [], "family-chat": [] }
   };
+}
+function familyPermission(state2, person) {
+  if (!Array.isArray(state2.familyVisibility)) return void 0;
+  return state2.familyVisibility.find((item) => item?.id === person.id && item.linkedAt === person.linkedAt);
 }
 function dayStart(value) {
   const date = new Date(value);
@@ -488,9 +494,10 @@ function unsyncedCloud() {
 
 // assistant-client.js
 var cloudSite = () => document.querySelector('meta[name="heban-cloud-site"]')?.content;
+var assistantUrl = () => document.querySelector('meta[name="heban-assistant-url"]')?.content;
 function directAssistantUrl(route2) {
   const site = cloudSite();
-  return site ? new URL(`#/${route2}`, site).href : "";
+  return site && !assistantUrl() ? new URL(`#/${route2}`, site).href : "";
 }
 function connectionError(message) {
   return Object.assign(new Error(message), { canOpenDirect: true });
@@ -528,8 +535,8 @@ function responseError(response, result) {
   return new Error("\u52A9\u624B\u670D\u52A1\u6682\u65F6\u4E0D\u53EF\u7528\u3002\u8BF7\u7A0D\u540E\u518D\u8BD5\u3002");
 }
 async function askAssistant(input) {
-  const site = cloudSite();
-  const endpoint = new URL("/api/assistant", site || location.origin);
+  const configured = assistantUrl();
+  const endpoint = configured ? new URL(configured) : new URL("/api/assistant", cloudSite() || location.origin);
   const timeout = requestTimeout(32e3);
   let response;
   let result;
@@ -537,7 +544,7 @@ async function askAssistant(input) {
     response = await fetch(endpoint, {
       method: "POST",
       credentials: "omit",
-      headers: { "Content-Type": site ? "text/plain;charset=UTF-8" : "application/json" },
+      headers: { "Content-Type": endpoint.origin === location.origin ? "application/json" : "text/plain;charset=UTF-8" },
       body: JSON.stringify(input),
       signal: timeout.signal
     });
@@ -1276,11 +1283,16 @@ async function signInWithDevice(api2, mode, fields) {
 // shortcuts.js
 var shortcutOptions = {
   guides: { title: "\u8DDF\u7740\u505A", link: "guides", glyph: "bill" },
+  ask: { title: "\u95EE\u95EE\u52A9\u624B", link: "ask", glyph: "chat" },
   camera: { title: "\u62CD\u7167\u95EE\u4E00\u95EE", link: "capture/device", glyph: "camera" },
   reminders: { title: "\u8BBE\u4E2A\u63D0\u9192", link: "reminders", glyph: "bell" },
   records: { title: "\u6211\u7684\u8BB0\u5F55", link: "records", glyph: "photo" },
-  chat: { title: "\u804A\u804A\u5929", link: "chat", glyph: "chat" }
+  chat: { title: "\u804A\u804A\u5929", link: "chat", glyph: "chat" },
+  devices: { title: "\u5BB6\u7535\u600E\u4E48\u7528", link: "devices", glyph: "remote" },
+  ...Object.fromEntries(lifeGuides.map(({ id, title, icon: icon2 }) => [id, { title, link: `guide/${id}`, glyph: icon2, group: "\u751F\u6D3B\u6B65\u9AA4" }])),
+  ...Object.fromEntries(deviceLessons.map(({ id, name, icon: icon2 }) => [id, { title: `${name}\u600E\u4E48\u7528`, link: `device/${id}`, glyph: icon2, group: "\u5BB6\u7535\u6B65\u9AA4" }]))
 };
+var defaultShortcuts = ["ask", "parcel", "bill", "devices", "reminders"];
 function cleanShortcut(source) {
   if (typeof source?.target !== "string") return null;
   const title = typeof source.title === "string" ? source.title.trim().slice(0, 24) : "";
@@ -1305,11 +1317,11 @@ var dialog = document.querySelector("#dialog");
 var status = document.querySelector("#status");
 var accountBar = document.querySelector("#account-bar");
 var recordRoutes = ["capture", "records", "record"];
-var routes = ["elder", "family", "chat", "ask", "reminders", "family-chat", "family-reminders", "family-shortcuts", "devices", "device", "family-devices", "device-editor", "guides", "guide", "connections", "shared-device", "assistant-settings", "mine", ...recordRoutes];
-var familyPages = ["elder", "family-shortcuts", "connections", "shared-device"];
+var routes = ["elder", "family", "chat", "ask", "reminders", "family-chat", "family-reminders", "family-shortcuts", "home-shortcuts", "family-overview", "devices", "device", "family-devices", "device-editor", "guides", "guide", "connections", "shared-device", "assistant-settings", "mine", ...recordRoutes];
+var familyPages = ["elder", "home-shortcuts", "family-shortcuts", "family-overview", "connections", "shared-device"];
 var pendingReplies = /* @__PURE__ */ new Map();
 var failedReplies = /* @__PURE__ */ new Map();
-var elderRoutes = ["elder", "chat", "ask", "reminders", "devices", "device", "guides", "guide", "shared-device", "assistant-settings", "mine", ...recordRoutes];
+var elderRoutes = ["elder", "home-shortcuts", "chat", "ask", "reminders", "devices", "device", "guides", "guide", "shared-device", "assistant-settings", "mine", ...recordRoutes];
 var voices = window.SpeechRecognition || window.webkitSpeechRecognition;
 var longDate = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" });
 var repeats = { never: "\u53EA\u63D0\u9192\u4E00\u6B21", daily: "\u6BCF\u5929\u63D0\u9192", weekly: "\u6BCF\u5468\u63D0\u9192" };
@@ -1347,12 +1359,14 @@ var returnFocus = null;
 var statusTimer;
 var demoLastSeen = null;
 var recognition;
+var speechQueue;
 var deviceStep = 0;
 var deviceEditor = null;
 var account = null;
 var family = null;
 var familyError = "";
 var familyBusy = false;
+var overview = null;
 var cloudStatus = "saving";
 var invite = null;
 var authMode = "";
@@ -1367,8 +1381,8 @@ function accessPreference(value) {
   } catch {
   }
 }
-function loginAction(label = "\u7528\u90AE\u7BB1\u767B\u5F55", classes = "button") {
-  return cloudSite2 ? `<a class="${classes}" href="${escapeHtml(cloudSite2)}">\u6253\u5F00\u4E91\u7AEF\u7248</a>` : `<button class="${classes}" data-action="show-login" type="button">${label}</button>`;
+function loginAction(label = "\u7528\u90AE\u7BB1\u767B\u5F55", classes = "button", destination = "") {
+  return cloudSite2 ? `<a class="${classes}" href="${escapeHtml(destination ? new URL(`#/${destination}`, cloudSite2).href : cloudSite2)}">\u6253\u5F00\u4E91\u7AEF\u7248</a>` : `<button class="${classes}" data-action="show-login" type="button">${label}</button>`;
 }
 function updateCloudStatus(current, detail = "") {
   cloudStatus = current;
@@ -1397,24 +1411,63 @@ function notify(message) {
   statusTimer = window.setTimeout(() => status.classList.remove("visible"), 3700);
 }
 function noteActivity() {
-  if (account && state.monitoring && elderRoutes.includes(route) && document.visibilityState === "visible") {
+  if (account && (state.monitoring || state.familyVisibility.some((item) => item.activity)) && elderRoutes.includes(route) && document.visibilityState === "visible") {
     state.lastSeen = Date.now();
     save();
   }
 }
-function speak(text, rate = state.speechRate) {
-  if (!("speechSynthesis" in window)) {
-    notify("\u8FD9\u53F0\u6D4F\u89C8\u5668\u6682\u4E0D\u652F\u6301\u6717\u8BFB\u3002");
+function stopSpeech() {
+  clearTimeout(speechQueue?.startTimer);
+  speechQueue = null;
+  const engine = window.speechSynthesis;
+  if (engine?.speaking || engine?.pending) engine.cancel();
+}
+function speak(text, rate = state.speechRate, manual = true) {
+  if (!text?.trim()) return;
+  const engine = window.speechSynthesis;
+  const Utterance = window.SpeechSynthesisUtterance;
+  if (!engine || !Utterance) {
+    notify("\u5F53\u524D\u6D4F\u89C8\u5668\u4E0D\u63D0\u4F9B\u6717\u8BFB\u3002\u8BF7\u7528\u624B\u673A\u81EA\u5E26\u7684\u6D4F\u89C8\u5668\u6253\u5F00\u79BE\u4F34\u3002");
     return;
   }
-  const speech = new SpeechSynthesisUtterance(text);
-  speech.lang = "zh-CN";
-  speech.rate = speechRates[rate]?.value ?? speechRates.normal.value;
-  speech.onerror = (event) => {
-    if (event.error !== "interrupted" && event.error !== "canceled") notify("\u6682\u65F6\u65E0\u6CD5\u6717\u8BFB\uFF0C\u8BF7\u68C0\u67E5\u8BBE\u5907\u7684\u8BED\u97F3\u8BBE\u7F6E\u3002");
-  };
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(speech);
+  stopSpeech();
+  const chunks = text.trim().match(/[^。！？\n]{1,100}[。！？\n]*|[。！？\n]+/gu);
+  const zhVoices = (engine.getVoices?.() ?? []).filter((voice2) => /^(zh|cmn)(?:[-_]|$)/i.test(voice2.lang));
+  const mandarin = zhVoices.filter((voice2) => !/[-_](hk|mo|yue)(?:[-_]|$)/i.test(voice2.lang));
+  const voice = mandarin.find((item) => item.localService && /(?:[-_]cn|hans)/i.test(item.lang)) ?? mandarin.find((item) => item.localService) ?? mandarin[0] ?? zhVoices[0];
+  const queue = { utterance: null, startTimer: null };
+  speechQueue = queue;
+  function failure(error) {
+    if (speechQueue !== queue) return;
+    stopSpeech();
+    if (error === "canceled" || error === "interrupted") return;
+    notify(!manual ? "\u81EA\u52A8\u6717\u8BFB\u672A\u542F\u52A8\u3002\u8BF7\u70B9\u56DE\u590D\u4E0B\u65B9\u7684\u300C\u6717\u8BFB\u300D\u3002" : error === "voice-unavailable" || error === "language-unavailable" ? "\u8FD9\u53F0\u624B\u673A\u7F3A\u5C11\u4E2D\u6587\u8BED\u97F3\u3002\u8BF7\u5728\u624B\u673A\u7CFB\u7EDF\u91CC\u6DFB\u52A0\u4E2D\u6587\u8BED\u97F3\u3002" : "\u6CA1\u6709\u5F00\u59CB\u6717\u8BFB\u3002\u8BF7\u68C0\u67E5\u5A92\u4F53\u97F3\u91CF\uFF0C\u6216\u7528\u624B\u673A\u81EA\u5E26\u7684\u6D4F\u89C8\u5668\u6253\u5F00\u79BE\u4F34\u3002");
+  }
+  function next() {
+    if (speechQueue !== queue) return;
+    clearTimeout(queue.startTimer);
+    const part = chunks.shift();
+    if (!part) {
+      speechQueue = null;
+      return;
+    }
+    const item = new Utterance(part);
+    item.lang = voice?.lang ?? "zh-CN";
+    if (voice) item.voice = voice;
+    item.rate = speechRates[rate]?.value ?? speechRates.normal.value;
+    item.onstart = () => clearTimeout(queue.startTimer);
+    item.onend = next;
+    item.onerror = (event) => failure(event.error);
+    queue.utterance = item;
+    queue.startTimer = setTimeout(() => failure("timeout"), 4500);
+    try {
+      if (engine.paused) engine.resume();
+      engine.speak(item);
+    } catch {
+      failure("exception");
+    }
+  }
+  next();
 }
 var settings = (back = "ask") => `<a class="icon-button" href="#/assistant-settings/${back}" aria-label="\u52A9\u624B\u8BBE\u7F6E">${icon("tune", 23)}</a>`;
 function homeHeader(owner) {
@@ -1435,10 +1488,10 @@ function tile({ link, action, title, subtitle, glyph, tone = "sage", prominent =
     <span class="tile-icon ${tone}">${icon(glyph, 30)}</span><span class="tile-text"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(subtitle)}</span></span>${icon("right", 23)}</${tag}>`;
 }
 var quickCards = [
-  { link: "ask", title: "\u95EE\u95EE\u52A9\u624B", subtitle: "\u53EF\u4EE5\u8BF4\u8BDD\uFF0C\u4E5F\u53EF\u4EE5\u6253\u5B57", glyph: "chat", color: "blue" },
-  { link: "guide/parcel", title: "\u5FEB\u9012\u67DC\u53D6\u4EF6", subtitle: "\u627E\u53D6\u4EF6\u7801\uFF0C\u5B66\u7740\u5F00\u67DC\u95E8", glyph: "parcel", color: "peach" },
-  { link: "guide/bill", title: "\u67E5\u7535\u8D39\u8D26\u5355", subtitle: "\u770B\u770B\u8FD9\u671F\u8981\u4EA4\u591A\u5C11\u94B1", glyph: "bill", color: "lilac" },
-  { link: "devices", title: "\u5BB6\u7535\u600E\u4E48\u7528", subtitle: "\u770B\u56FE\u627E\u6309\u952E", glyph: "remote", color: "mint" }
+  { key: "ask", ...shortcutOptions.ask, subtitle: "\u53EF\u4EE5\u8BF4\u8BDD\uFF0C\u4E5F\u53EF\u4EE5\u6253\u5B57", color: "blue" },
+  { key: "parcel", ...shortcutOptions.parcel, subtitle: "\u627E\u53D6\u4EF6\u7801\uFF0C\u5B66\u7740\u5F00\u67DC\u95E8", color: "peach" },
+  { key: "bill", ...shortcutOptions.bill, subtitle: "\u770B\u770B\u8FD9\u671F\u8981\u4EA4\u591A\u5C11\u94B1", color: "lilac" },
+  { key: "devices", ...shortcutOptions.devices, subtitle: "\u770B\u56FE\u627E\u6309\u952E", color: "mint" }
 ];
 function featureCard({ link, title, subtitle, glyph, color = "blue", external = false }) {
   return `<a class="feature-card tone-${color}" href="${escapeHtml(external ? link : "#/" + link)}" ${external ? 'target="_blank" rel="noopener noreferrer"' : ""}>
@@ -1446,20 +1499,40 @@ function featureCard({ link, title, subtitle, glyph, color = "blue", external = 
     <span class="feature-text"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(subtitle)}</span></span>
   </a>`;
 }
-function addedFeatureCards() {
+function addedHomeShortcuts() {
   const items = [...state.shortcuts, ...family?.shortcuts?.filter((item) => item.direction === "received") ?? []];
   const seen = /* @__PURE__ */ new Set();
-  return items.map((item) => {
+  return items.flatMap((item) => {
     const entry = cleanShortcut(item);
-    if (!entry || seen.has(entry.kind + entry.target)) return "";
+    if (!entry || seen.has(entry.kind + entry.target)) return [];
     seen.add(entry.kind + entry.target);
     const description = item.name ? `${item.name}\u6DFB\u52A0` : "\u5BB6\u5C5E\u7AEF\u6DFB\u52A0";
-    if (entry.kind === "built-in") return featureCard({ ...shortcutOptions[entry.target], title: entry.title, subtitle: description, color: "lilac" });
-    return featureCard({ link: entry.target, title: entry.title, subtitle: new URL(entry.target).hostname, glyph: "question", color: "mint", external: true });
-  }).join("");
+    const info = { id: item.id, place: item.direction === "received" ? "remote" : "local", title: entry.title };
+    if (entry.kind === "built-in") return [{ ...shortcutOptions[entry.target], ...info, key: entry.target, subtitle: description, color: "lilac" }];
+    return [{ ...info, link: entry.target, subtitle: new URL(entry.target).hostname, glyph: "question", color: "mint", external: true }];
+  });
+}
+function visibleDefaults(added) {
+  return defaultShortcuts.filter((key) => !state.hiddenShortcuts.includes(key) && !added.some((item) => item.key === key));
+}
+function homeShortcutsScreen() {
+  const added = addedHomeShortcuts();
+  const defaults = visibleDefaults(added).map((key) => ({ ...shortcutOptions[key], key, place: "default" }));
+  const rows = [...defaults, ...added];
+  const hidden = state.hiddenShortcuts.filter((key) => !added.some((item) => item.key === key));
+  return `${pageHeader("\u7BA1\u7406\u5E38\u7528\u529F\u80FD", "elder")}<main class="surface shortcut-screen">
+    <p class="device-help">\u5220\u9664\u540E\uFF0C\u8BE5\u5165\u53E3\u4F1A\u4ECE\u9996\u9875\u79FB\u9664\u3002\u539F\u6765\u7684\u63D0\u9192\u3001\u7167\u7247\u548C\u4F7F\u7528\u8BB0\u5F55\u4ECD\u53EF\u67E5\u770B\u3002</p>
+    <section class="shortcut-items"><h2>\u9996\u9875\u4E0A\u7684\u529F\u80FD</h2>
+      ${rows.length ? `<ul class="record-list">${rows.map((item) => `<li class="shortcut-row"><div><strong>${escapeHtml(item.title)}</strong>${item.subtitle ? `<span>${escapeHtml(item.subtitle)}</span>` : ""}</div>
+        <button class="button quiet" type="button" data-action="remove-shortcut" data-id="${escapeHtml(item.id ?? "")}" data-place="${item.place}" data-key="${escapeHtml(item.key ?? "")}" aria-label="\u5220\u9664${escapeHtml(item.title)}\u5165\u53E3">\u5220\u9664</button></li>`).join("")}</ul>` : '<p class="empty-card">\u9996\u9875\u6682\u65F6\u6CA1\u6709\u5E38\u7528\u5165\u53E3\u3002</p>'}</section>
+    ${hidden.length ? `<section class="shortcut-items"><h2>\u53EF\u6062\u590D\u7684\u9ED8\u8BA4\u5165\u53E3</h2><ul class="record-list">${hidden.map((key) => `<li class="shortcut-row"><strong>${escapeHtml(shortcutOptions[key].title)}</strong><button class="button quiet" type="button" data-action="restore-shortcut" data-key="${key}">\u6062\u590D</button></li>`).join("")}</ul></section>` : ""}
+  </main>`;
 }
 function elderHome() {
   const next = reminderOrder(state.reminders, "elder").find((item) => !item.done && item.at > Date.now());
+  const added = addedHomeShortcuts();
+  const defaults = visibleDefaults(added);
+  const featured = [...quickCards.filter((item) => defaults.includes(item.key)), ...added];
   return `${homeHeader("elder")}<main class="surface home-screen">
     <div class="home-heading"><h1 id="screen-title" tabindex="-1">\u751F\u6D3B\u5E2E\u624B</h1><p class="date">${longDate.format(/* @__PURE__ */ new Date())}</p></div>
     <section class="feature-banner home-capture" aria-labelledby="capture-home-title">
@@ -1468,17 +1541,17 @@ function elderHome() {
       <img src="./assets/guide-kit.webp" width="520" height="434" alt="" fetchpriority="high">
     </section>
     <section class="tool-section" aria-labelledby="home-tools-title">
-      <div class="section-heading"><h2 id="home-tools-title">\u5E38\u7528\u529F\u80FD</h2><a class="section-link" href="#/records">\u6211\u7684\u8BB0\u5F55</a></div>
-      <div class="feature-grid">${quickCards.map(featureCard).join("")}${addedFeatureCards()}</div>
+      <div class="section-heading"><h2 id="home-tools-title">\u5E38\u7528\u529F\u80FD</h2><div class="section-actions"><a class="section-link" href="#/records">\u6211\u7684\u8BB0\u5F55</a><a class="section-link" href="#/home-shortcuts">\u7BA1\u7406</a></div></div>
+      ${featured.length ? `<div class="feature-grid">${featured.map(featureCard).join("")}</div>` : defaults.includes("reminders") ? "" : '<p class="empty-card">\u8FD8\u6CA1\u6709\u5E38\u7528\u5165\u53E3\u3002</p>'}
     </section>
-    <div class="app-list home-shortcuts">
+    ${defaults.includes("reminders") ? `<div class="app-list home-shortcuts">
       ${tile({ link: "reminders", title: "\u8BBE\u4E2A\u63D0\u9192", subtitle: next ? `${formatWhen(next.at)}\u3000${next.title}` : "\u8BB0\u4E0B\u4E70\u83DC\u3001\u51FA\u95E8\u7684\u65F6\u95F4", glyph: "bell" })}
-    </div>
+    </div>` : ""}
   </main>`;
 }
 function bottomNav() {
   const tabs = [
-    { link: "elder", label: "\u9996\u9875", glyph: "home", pages: ["elder"] },
+    { link: "elder", label: "\u9996\u9875", glyph: "home", pages: ["elder", "home-shortcuts"] },
     { link: "ask", label: "\u52A9\u624B", glyph: "chat", pages: ["ask", "chat", "assistant-settings", "capture"] },
     { link: "guides", label: "\u8DDF\u7740\u505A", glyph: "bill", pages: ["guides", "guide", "devices", "device"] },
     { link: "mine", label: "\u6211\u7684", glyph: "people" }
@@ -1498,6 +1571,7 @@ function mineScreen() {
       ${tile({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u770B\u770B\u5B58\u4E0B\u7684\u7167\u7247", glyph: "photo" })}
       ${tile({ link: "reminders", title: "\u6211\u7684\u63D0\u9192", subtitle: "\u770B\u65F6\u95F4\uFF0C\u4E5F\u53EF\u4EE5\u6539\u65F6\u95F4", glyph: "bell" })}
       ${tile({ link: "assistant-settings/mine", title: "\u52A9\u624B\u8BBE\u7F6E", subtitle: "\u53EF\u4EE5\u8BA9\u52A9\u624B\u8BFB\u6162\u4E00\u70B9", glyph: "tune" })}
+      ${tile({ link: "connections", title: "\u548C\u5BB6\u4EBA\u5206\u4EAB", subtitle: "\u9009\u62E9\u5BB6\u4EBA\u80FD\u770B\u5230\u7684\u5185\u5BB9", glyph: "people" })}
       ${tile({ link: "family", title: "\u5BB6\u5C5E\u7AEF", subtitle: "\u8054\u7CFB\u5BB6\u4EBA\u3001\u5236\u4F5C\u8BBE\u5907\u5361", glyph: "heart" })}
     </div>
   </main>`;
@@ -1511,10 +1585,11 @@ function familyHome() {
   const phoneAction = state.phone ? `<a class="button small" href="tel:${escapeHtml(state.phone)}">${icon("phone", 19)}\u53BB\u62E8\u6253</a>` : '<button class="button small" data-action="contact" type="button">\u8BBE\u7F6E\u53F7\u7801</button>';
   return `${homeHeader("family")}<main class="surface family-screen"><h1 id="screen-title" tabindex="-1">\u5BB6\u4EBA\u5173\u6000</h1>
     <button class="care-card ${overdue ? "care-warn" : ""}" type="button" data-action="care"><span class="care-icon">${icon("heart", 42)}</span>
-      <span><strong>${demoLastSeen ? "\u5173\u6000\u72B6\u6001 \xB7 \u6F14\u793A" : "\u5173\u6000\u72B6\u6001"}</strong><span>${activity}</span></span>${icon("right", 22)}</button>
+      <span><strong>${demoLastSeen ? "\u672C\u673A\u63D0\u9192\u6F14\u793A" : "\u672C\u673A\u5173\u6000\u8BBE\u7F6E"}</strong><span>${activity}</span></span>${icon("right", 22)}</button>
     <div class="contact-card"><span class="tile-icon apricot">${icon("phone", 30)}</span><span class="tile-text"><strong>\u7ED9${escapeHtml(state.contactName)}\u6253\u7535\u8BDD</strong><span>${callReminder ? `${formatWhen(callReminder.at)} \u6709\u8054\u7CFB\u63D0\u9192` : "\u9009\u4E2A\u65F6\u95F4\uFF0C\u6253\u4E2A\u7535\u8BDD"}</span></span>${phoneAction}</div>
     <div class="feature-grid family-tools">
       ${featureCard({ link: "connections", title: "\u5BB6\u5EAD\u8FDE\u63A5", subtitle: "\u8FDE\u63A5\u5BB6\u4EBA\u548C\u67E5\u770B\u5206\u4EAB", glyph: "people", color: "blue" })}
+      ${featureCard({ link: "family-overview", title: "\u957F\u8F88\u804A\u5929\u548C\u8FD1\u51B5", subtitle: "\u67E5\u770B\u957F\u8F88\u540C\u610F\u5206\u4EAB\u7684\u5185\u5BB9", glyph: "heart", color: "peach" })}
       ${featureCard({ link: "family-reminders", title: "\u8054\u7CFB\u63D0\u9192", subtitle: "\u8BB0\u4E0B\u6253\u7535\u8BDD\u7684\u65F6\u95F4", glyph: "calendar", color: "peach" })}
       ${featureCard({ link: "family-devices", title: "\u5236\u4F5C\u8BBE\u5907\u5361", subtitle: "\u5728\u7167\u7247\u4E0A\u6807\u51FA\u6309\u952E", glyph: "photo", color: "mint" })}
       ${featureCard({ link: "family-chat", title: "\u8DDF\u52A9\u624B\u804A\u804A", subtitle: "\u804A\u804A\u600E\u4E48\u5173\u5FC3\u5BB6\u4EBA", glyph: "chat", color: "lilac" })}
@@ -1528,21 +1603,27 @@ function familyShortcutsScreen() {
   if (!account.guest && !family && !familyError) return `${head}<main class="surface"><p class="empty-card" role="status">\u6B63\u5728\u8BFB\u53D6\u5BB6\u4EBA\u548C\u529F\u80FD\u2026</p></main>`;
   const links = family?.links ?? [];
   const items = [...state.shortcuts, ...family?.shortcuts?.filter((item) => item.direction === "sent") ?? []];
+  const catalog = Object.entries(shortcutOptions);
+  const options = (group) => catalog.filter(([, item]) => item.group === group).map(([key, item]) => `<option value="${key}">${item.title}</option>`).join("");
   return `${head}<main class="surface shortcut-screen">
     <form class="shortcut-form" data-form="family-shortcut">
       <h2>\u6DFB\u52A0\u4E00\u4E2A\u529F\u80FD</h2>
       <label for="shortcut-recipient">\u52A0\u7ED9\u8C01\uFF1F</label>
-      <select id="shortcut-recipient" name="recipient"><option value="local">${account.guest ? "\u8FD9\u4E2A\u6D4F\u89C8\u5668\u7684\u957F\u8F88\u7AEF" : "\u5F53\u524D\u8D26\u53F7\u7684\u957F\u8F88\u7AEF"}</option>
-        ${links.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select>
-      ${!links.length ? `<p class="form-help">\u60F3\u540C\u6B65\u5230\u5BB6\u4EBA\u7684\u624B\u673A\uFF1F\u5148\u5B8C\u6210\u5BB6\u5EAD\u8FDE\u63A5\u3002 <a class="section-link" href="#/connections">\u53BB\u8FDE\u63A5</a></p>` : ""}
-      <label for="shortcut-kind">\u9009\u4E00\u4E2A\u5165\u53E3</label>
-      <select id="shortcut-kind" name="kind">
-        ${Object.entries(shortcutOptions).map(([name, item]) => `<option value="${name}">${item.title}</option>`).join("")}
+      <select id="shortcut-recipient" name="recipient" required>${links.length > 1 ? '<option value="">\u8BF7\u9009\u62E9\u4E00\u4F4D\u5BB6\u4EBA</option>' : ""}
+        ${links.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}\u7684\u9996\u9875</option>`).join("")}
+        <option value="local">${account.guest ? "\u8FD9\u4E2A\u6D4F\u89C8\u5668\u7684\u957F\u8F88\u9996\u9875" : "\u81EA\u5DF1\u7684\u957F\u8F88\u9996\u9875"}</option></select>
+      ${!links.length ? `<p class="form-help">\u60F3\u6DFB\u52A0\u5230\u5BB6\u4EBA\u624B\u673A\u7684\u9996\u9875\uFF1F\u5148\u5B8C\u6210\u5BB6\u5EAD\u8FDE\u63A5\u3002 ${account.guest ? loginAction("\u7528\u90AE\u7BB1\u767B\u5F55", "section-link", "family-shortcuts") : '<a class="section-link" href="#/connections">\u53BB\u8FDE\u63A5\u5BB6\u4EBA</a>'}</p>` : ""}
+      <label for="shortcut-kind">\u8981\u6DFB\u52A0\u4EC0\u4E48\uFF1F</label>
+      <select id="shortcut-kind" name="kind" required>
+        <option value="">\u8BF7\u9009\u62E9\u4E00\u4E2A\u529F\u80FD</option>
+        <optgroup label="\u751F\u6D3B\u6B65\u9AA4">${options("\u751F\u6D3B\u6B65\u9AA4")}</optgroup>
+        <optgroup label="\u5BB6\u7535\u6B65\u9AA4">${options("\u5BB6\u7535\u6B65\u9AA4")}</optgroup>
+        <optgroup label="\u5176\u4ED6\u529F\u80FD">${options(void 0)}</optgroup>
         <option value="website">\u81EA\u5B9A\u4E49\u7F51\u9875</option>
       </select>
+      <label for="shortcut-title">\u5728\u9996\u9875\u663E\u793A\u7684\u540D\u5B57</label><input id="shortcut-title" name="title" maxlength="24" placeholder="\u9009\u586B\uFF0C\u7559\u7A7A\u5C31\u7528\u529F\u80FD\u540D\u79F0">
       <div class="shortcut-custom" data-shortcut-custom hidden>
-        <label for="shortcut-title">\u663E\u793A\u540D\u79F0</label><input id="shortcut-title" name="title" maxlength="24" placeholder="\u4F8B\u5982\uFF1A\u793E\u533A\u52A9\u9910">
-        <label for="shortcut-url">\u7F51\u9875\u5730\u5740</label><input id="shortcut-url" name="target" type="url" inputmode="url" maxlength="500" placeholder="https://">
+        <label for="shortcut-url">\u7F51\u9875\u5730\u5740</label><input id="shortcut-url" name="target" type="url" inputmode="url" maxlength="500" placeholder="https://" disabled>
       </div>
       <p class="form-error" role="alert">${escapeHtml(familyError)}</p>
       <button class="button" type="submit">${icon("plus", 21)}\u6DFB\u52A0\u5230\u957F\u8F88\u7AEF</button>
@@ -1555,13 +1636,17 @@ function familyShortcutsScreen() {
 }
 async function submitShortcut(form, data) {
   const kind = data.get("kind");
-  const shortcut = cleanShortcut(kind === "website" ? { kind, title: data.get("title"), target: data.get("target") } : { kind: "built-in", target: kind });
+  const shortcut = cleanShortcut(kind === "website" ? { kind, title: data.get("title"), target: data.get("target") } : { kind: "built-in", target: kind, title: data.get("title") });
   const error = form.querySelector(".form-error");
   if (!shortcut) {
-    error.textContent = "\u8BF7\u586B\u5199\u540D\u79F0\u548C\u4EE5 https:// \u5F00\u5934\u7684\u7F51\u9875\u5730\u5740\u3002";
+    error.textContent = kind === "website" ? "\u8BF7\u586B\u5199\u540D\u79F0\u548C\u4EE5 https:// \u5F00\u5934\u7684\u7F51\u9875\u5730\u5740\u3002" : "\u8BF7\u9009\u62E9\u8981\u6DFB\u52A0\u7684\u529F\u80FD\u3002";
     return;
   }
   const recipient = data.get("recipient");
+  if (!recipient) {
+    error.textContent = "\u8BF7\u9009\u62E9\u52A0\u5230\u8C01\u7684\u9996\u9875\u3002";
+    return;
+  }
   if (recipient === "local") {
     if (state.shortcuts.some((item) => item.kind === shortcut.kind && item.target === shortcut.target)) {
       error.textContent = "\u8FD9\u4E2A\u5165\u53E3\u5DF2\u7ECF\u6DFB\u52A0\u8FC7\u3002";
@@ -1591,9 +1676,19 @@ async function submitShortcut(form, data) {
   }
 }
 async function removeShortcut(button) {
-  const { id, place } = button.dataset;
+  const { id, place, key } = button.dataset;
+  const hideDefault = route === "home-shortcuts" && defaultShortcuts.includes(key);
+  function updateHiddenDefaults() {
+    if (hideDefault && !state.hiddenShortcuts.includes(key)) state.hiddenShortcuts.push(key);
+  }
+  if (place === "default") {
+    updateHiddenDefaults();
+    refresh("\u5DF2\u4ECE\u9996\u9875\u5220\u9664\u3002");
+    return;
+  }
   if (place === "local") {
     state.shortcuts = state.shortcuts.filter((item) => item.id !== id);
+    updateHiddenDefaults();
     refresh("\u529F\u80FD\u5165\u53E3\u5DF2\u79FB\u9664\u3002");
     return;
   }
@@ -1603,7 +1698,11 @@ async function removeShortcut(button) {
     const result = await api(`/api/family/shortcuts/${encodeURIComponent(id)}`, "DELETE");
     if (account !== active) return;
     family = result;
-    if (route === "family-shortcuts") render();
+    if (hideDefault) {
+      updateHiddenDefaults();
+      save();
+    }
+    if (["family-shortcuts", "home-shortcuts", "elder"].includes(route)) render();
     notify("\u529F\u80FD\u5165\u53E3\u5DF2\u79FB\u9664\u3002");
   } catch (error) {
     notify(error.message);
@@ -1914,12 +2013,12 @@ function guideInteraction(action, button) {
 function connectionsScreen() {
   if (account.guest) return `${pageHeader("\u5BB6\u5EAD\u8FDE\u63A5", "family")}<main class="surface connections">
     <p class="empty-card">${cloudSite2 ? "\u8BF7\u5728\u4E91\u7AEF\u7248\u767B\u5F55\u540E\u8FDE\u63A5\u5BB6\u4EBA\uFF0C\u5206\u4EAB\u95EE\u9898\u548C\u8BBE\u5907\u5361\u3002" : "\u767B\u5F55\u540E\u53EF\u4EE5\u8FDE\u63A5\u5BB6\u4EBA\uFF0C\u5206\u4EAB\u95EE\u9898\u548C\u8BBE\u5907\u5361\u3002"}</p>
-    ${loginAction()}
+    ${loginAction("\u7528\u90AE\u7BB1\u767B\u5F55", "button", "connections")}
   </main>`;
   const links = family?.links ?? [];
   const items = family?.items ?? [];
   return `${pageHeader("\u5BB6\u5EAD\u8FDE\u63A5", "family")}<main class="surface connections-screen">
-    <p class="device-help">\u7528\u9080\u8BF7\u7801\u8FDE\u63A5\u4E0D\u540C\u8D26\u6237\u3002\u6BCF\u6761\u5185\u5BB9\u90FD\u7531\u60A8\u9009\u62E9\u662F\u5426\u5206\u4EAB\u3002</p>
+    <p class="device-help">\u7528\u9080\u8BF7\u7801\u8FDE\u63A5\u4E0D\u540C\u8D26\u6237\u3002\u8FDE\u63A5\u540E\uFF0C\u5728\u300C\u5206\u4EAB\u8BBE\u7F6E\u300D\u9009\u62E9\u5BF9\u65B9\u80FD\u770B\u5230\u7684\u5185\u5BB9\u3002</p>
     <div class="connection-actions">
       <button class="button" type="button" data-action="invite-family">\u751F\u6210\u9080\u8BF7\u7801</button>
       <button class="button quiet" type="button" data-action="join-family">\u8F93\u5165\u5BB6\u4EBA\u7684\u9080\u8BF7\u7801</button>
@@ -1927,7 +2026,9 @@ function connectionsScreen() {
     ${invite ? `<div class="connection-code"><label for="invite-code">\u9080\u8BF7\u7801 \xB7 24 \u5C0F\u65F6\u6709\u6548</label><input id="invite-code" readonly value="${escapeHtml(invite)}"><button class="button quiet" type="button" data-action="copy-invite">\u590D\u5236\u9080\u8BF7\u7801</button></div>` : ""}
     ${familyError ? `<p role="alert" class="form-error">${escapeHtml(familyError)}</p><button class="button quiet" type="button" data-action="reload-family">\u91CD\u65B0\u8BFB\u53D6</button>` : ""}
     <section><h2>\u5DF2\u8FDE\u63A5\u7684\u5BB6\u4EBA</h2>
-      ${links.length ? `<div class="shared-list">${links.map((person) => `<div class="connection-row"><strong>${escapeHtml(person.name)}</strong><button type="button" class="text-button" data-action="remove-family" data-id="${person.id}">\u89E3\u9664\u8FDE\u63A5</button></div>`).join("")}</div>` : `<p class="empty-card">${familyBusy ? "\u6B63\u5728\u8BFB\u53D6\u2026" : "\u8FD8\u6CA1\u6709\u8FDE\u63A5\u5BB6\u4EBA\u3002"}</p>`}
+      ${links.length ? `<div class="shared-list">${links.map((person) => `<div class="connection-row family-person"><strong>${escapeHtml(person.name)}</strong><div class="section-actions">
+        <button type="button" class="text-button" data-action="family-permission" data-id="${escapeHtml(person.id)}" aria-label="${escapeHtml(person.name)}\u7684\u5206\u4EAB\u8BBE\u7F6E">\u5206\u4EAB\u8BBE\u7F6E</button>
+        <button type="button" class="text-button" data-action="remove-family" data-id="${escapeHtml(person.id)}">\u89E3\u9664\u8FDE\u63A5</button></div></div>`).join("")}</div>` : `<p class="empty-card">${familyBusy ? "\u6B63\u5728\u8BFB\u53D6\u2026" : "\u8FD8\u6CA1\u6709\u8FDE\u63A5\u5BB6\u4EBA\u3002"}</p>`}
     </section>
     <section><h2>\u5BB6\u5EAD\u5206\u4EAB</h2>
       ${items.length ? `<div class="shared-list">${items.map((item) => `<article class="connection-row connection-share"><div><strong>${escapeHtml(item.payload.title)}</strong><span>${item.direction === "sent" ? "\u53D1\u7ED9" : "\u6765\u81EA"} ${escapeHtml(item.name)} \xB7 ${formatWhen(item.at)}</span></div>
@@ -1938,16 +2039,86 @@ function connectionsScreen() {
     <div class="connection-account"><button class="text-button" type="button" data-action="reload-family">\u5237\u65B0\u5BB6\u5EAD\u5206\u4EAB</button><button class="text-button" data-action="account-signout" type="button">\u9000\u51FA\u767B\u5F55</button></div>
   </main>`;
 }
+function familyOverviewScreen() {
+  const title = pageHeader("\u957F\u8F88\u804A\u5929\u548C\u8FD1\u51B5", "family");
+  if (account.guest) return `${title}<main class="surface connections-screen"><p class="empty-card">\u767B\u5F55\u5E76\u8FDE\u63A5\u957F\u8F88\u540E\uFF0C\u53EF\u4EE5\u67E5\u770B\u5BF9\u65B9\u540C\u610F\u5206\u4EAB\u7684\u5185\u5BB9\u3002</p>${loginAction("\u7528\u90AE\u7BB1\u767B\u5F55", "button", "family-overview")}</main>`;
+  const links = family?.links ?? [];
+  const id = routeDeviceId();
+  const data = overview?.id === id ? overview : null;
+  const seen = data?.activity?.lastSeen;
+  const days = seen ? inactiveDays(seen) : 0;
+  return `${title}<main class="surface connections-screen family-overview">
+    ${links.length ? `<section><h2>\u9009\u62E9\u4E00\u4F4D\u5BB6\u4EBA</h2><div class="connection-actions">${links.map((person) => `<a class="button ${id === person.id ? "" : "quiet"}" href="#/family-overview/${encodeURIComponent(person.id)}" ${id === person.id ? 'aria-current="page"' : ""}>${escapeHtml(person.name)}</a>`).join("")}</div></section>` : ""}
+    ${!id ? familyError ? `<p class="form-error" role="alert">${escapeHtml(familyError)}</p><button class="button quiet" data-action="reload-family" type="button">\u91CD\u65B0\u8BFB\u53D6</button>` : !links.length ? familyBusy ? '<p class="empty-card" role="status">\u6B63\u5728\u8BFB\u53D6\u5BB6\u4EBA\u2026</p>' : '<p class="empty-card">\u5148\u901A\u8FC7\u9080\u8BF7\u7801\u8FDE\u63A5\u957F\u8F88\u3002</p><a class="button" href="#/connections">\u53BB\u8FDE\u63A5\u5BB6\u4EBA</a>' : '<p class="empty-card">\u9009\u62E9\u5BB6\u4EBA\u540E\u53EF\u67E5\u770B\u5BF9\u65B9\u5206\u4EAB\u7684\u5185\u5BB9\u3002</p>' : data?.error ? `<p class="form-error" role="alert">${escapeHtml(data.error)}</p><button class="button quiet" type="button" data-action="reload-overview">\u91CD\u65B0\u8BFB\u53D6</button>` : !data || data.loading ? '<p class="empty-card" role="status">\u6B63\u5728\u8BFB\u53D6\u957F\u8F88\u5206\u4EAB\u7684\u5185\u5BB9\u2026</p>' : `<div class="section-heading"><h2>${escapeHtml(data.name)}\u5206\u4EAB\u7684\u5185\u5BB9</h2><button class="text-button" type="button" data-action="reload-overview">\u5237\u65B0</button></div>
+        <section class="overview-card"><h3>\u6700\u8FD1\u4F7F\u7528</h3>
+          <p>${data.activity ? seen ? `\u4E0A\u6B21\u4F7F\u7528\u79BE\u4F34 ${formatWhen(seen)}` : "\u6682\u65F6\u8FD8\u6CA1\u6709\u4F7F\u7528\u8BB0\u5F55\u3002" : "\u8FD9\u4F4D\u5BB6\u4EBA\u8FD8\u672A\u5206\u4EAB\u4F7F\u7528\u65F6\u95F4\u3002"}</p>
+          ${seen && days >= data.activity.quietDays ? `<p>\u5DF2 ${days} \u5929\u672A\u6253\u5F00\u79BE\u4F34\u3002\u65B9\u4FBF\u65F6\u53EF\u4EE5\u6253\u7535\u8BDD\u95EE\u5019\u3002</p>` : ""}</section>
+        <section class="overview-card"><h3>\u6700\u8FD1\u804A\u5929\u548C\u95EE\u7B54</h3>${data.chats ? [["ask", "\u751F\u6D3B\u95EE\u7B54"], ["chat", "\u804A\u804A\u5929"]].map(([mode, label]) => `<div class="overview-conversation"><h4>${label}</h4>
+          ${data.chats[mode].length ? `<ul class="record-list">${data.chats[mode].map((message) => `<li><strong>${message.role === "user" ? "\u957F\u8F88" : "\u79BE\u4F34"}</strong>${message.at ? `<time datetime="${new Date(message.at).toISOString()}">${formatWhen(message.at)}</time>` : ""}<p>${escapeHtml(message.text)}</p></li>`).join("")}</ul>` : "<p>\u6682\u65E0\u804A\u5929\u8BB0\u5F55\u3002</p>"}</div>`).join("") : "<p>\u8FD9\u4F4D\u5BB6\u4EBA\u8FD8\u672A\u5206\u4EAB\u804A\u5929\u5185\u5BB9\u3002\u957F\u8F88\u53EF\u5728\u300C\u6211\u7684 \u2192 \u548C\u5BB6\u4EBA\u5206\u4EAB\u300D\u91CC\u5F00\u542F\u3002</p>"}</section>`}
+  </main>`;
+}
+async function loadOverview() {
+  const id = routeDeviceId();
+  if (!id || account?.guest || route !== "family-overview") return;
+  const active = account;
+  const current = { id, loading: true };
+  overview = current;
+  render();
+  try {
+    Object.assign(current, await api(`/api/family/overview/${encodeURIComponent(id)}`));
+  } catch (error) {
+    current.error = error.message;
+  } finally {
+    current.loading = false;
+    if (active === account && overview === current && route === "family-overview" && routeDeviceId() === id) render();
+  }
+}
+function showFamilyPermission(id) {
+  const person = family?.links.find((item) => item.id === id);
+  if (!person) return;
+  const permission = familyPermission(state, person);
+  showDialog(`\u5206\u4EAB\u7ED9${escapeHtml(person.name)}`, `<form data-form="family-permission" data-id="${escapeHtml(id)}">
+    <label class="check-input"><input type="checkbox" name="activity" ${permission?.activity ? "checked" : ""}><span>\u8BA9\u5BF9\u65B9\u67E5\u770B\u6211\u6700\u8FD1\u4F7F\u7528\u79BE\u4F34\u7684\u65F6\u95F4</span></label>
+    <label class="check-input"><input type="checkbox" name="chats" ${permission?.chats ? "checked" : ""}><span>\u8BA9\u5BF9\u65B9\u67E5\u770B\u6211\u6700\u8FD1\u7684\u804A\u5929\u548C\u95EE\u7B54\u6587\u5B57</span></label>
+    <p class="form-help">\u8BF7\u7531\u672C\u4EBA\u9009\u62E9\u3002\u5F00\u542F\u540E\uFF0C\u5BF9\u65B9\u53EF\u770B\u5230\u6BCF\u4E2A\u804A\u5929\u9875\u6700\u8FD1 12 \u6761\u6587\u5B57\uFF0C\u53D6\u6D88\u52FE\u9009\u5E76\u4FDD\u5B58\u5373\u53EF\u5173\u95ED\u3002</p>
+    <p class="form-error" role="alert"></p><button class="button wide" type="submit">\u4FDD\u5B58\u5206\u4EAB\u8BBE\u7F6E</button>
+  </form>`);
+}
+async function saveFamilyPermission(form, data) {
+  const person = family?.links.find((item) => item.id === form.dataset.id);
+  if (!person) return;
+  const active = account;
+  const button = form.querySelector("[type=submit]");
+  const activity = data.has("activity");
+  const chats = data.has("chats");
+  state.familyVisibility = state.familyVisibility.filter((item) => item.id !== person.id);
+  if (activity || chats) state.familyVisibility.push({ id: person.id, linkedAt: person.linkedAt, activity, chats });
+  if (activity && document.visibilityState === "visible") state.lastSeen = Date.now();
+  const notified = save();
+  button.disabled = true;
+  try {
+    if (!notified || !await flushCloud()) throw new Error("\u8BBE\u7F6E\u8FD8\u6CA1\u540C\u6B65\uFF0C\u8BF7\u8FDE\u63A5\u7F51\u7EDC\u540E\u91CD\u8BD5\u3002");
+    if (account !== active) return;
+    if (form.isConnected) dialog.close();
+    render();
+    notify("\u5206\u4EAB\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\u3002");
+  } catch (error) {
+    form.querySelector(".form-error").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
 var familyLoad;
 async function loadFamily() {
   if (account?.guest) return;
   const active = account;
   if (familyLoad) return familyLoad;
+  const previous = family;
   familyBusy = true;
   familyError = "";
   familyLoad = api("/api/family").then(
     (data) => {
-      if (account === active) family = data;
+      if (account === active && family === previous) family = data;
     },
     (error) => {
       if (account === active) familyError = error.message;
@@ -2087,6 +2258,7 @@ async function startCloud(mode) {
   familyLoad = null;
   familyError = "";
   familyBusy = false;
+  overview = null;
   invite = null;
   formMode = "";
   authPanel = false;
@@ -2205,6 +2377,8 @@ function render() {
     guide: guideScreen,
     connections: connectionsScreen,
     "shared-device": deviceScreen,
+    "home-shortcuts": homeShortcutsScreen,
+    "family-overview": familyOverviewScreen,
     capture: records.captureScreen,
     records: records.recordsScreen,
     record: records.recordScreen,
@@ -2289,7 +2463,7 @@ async function sendMessage(text, retry = false) {
     const failed = failedReplies.get(mode);
     if (failed?.account !== active || messages.at(-1)?.id !== failed.questionId) return;
   } else {
-    messages.push({ id: crypto.randomUUID(), role: "user", text: input });
+    messages.push({ id: crypto.randomUUID(), role: "user", text: input, at: Date.now() });
   }
   failedReplies.delete(mode);
   const questionId = messages.at(-1).id;
@@ -2315,7 +2489,7 @@ async function sendMessage(text, retry = false) {
   }
   if (account !== active) return;
   if (failure) failedReplies.set(mode, { account: active, text: input, error: failure, questionId });
-  else messages.push({ id: crypto.randomUUID(), role: "assistant", text: reply, draft: validDraft });
+  else messages.push({ id: crypto.randomUUID(), role: "assistant", text: reply, draft: validDraft, at: Date.now() });
   if (messages.length > 150) messages.splice(0, messages.length - 150);
   noteActivity();
   save();
@@ -2328,7 +2502,7 @@ async function sendMessage(text, retry = false) {
     document.querySelector(".message:last-child")?.scrollIntoView({ block: "nearest" });
     document.querySelector("#message-input")?.focus({ preventScroll: true });
   }
-  if (state.listen) speak(failure?.message || reply);
+  if (state.listen) speak(failure?.message || reply, state.speechRate, false);
 }
 function startVoice(button) {
   if (!voices) {
@@ -2388,7 +2562,7 @@ function checkReminders() {
   due.notified = true;
   save();
   showDialog("\u63D0\u9192\u65F6\u95F4\u5230\u4E86", `<p class="share-preview">${escapeHtml(due.title)}</p><div class="dialog-actions"><button class="button" type="button" data-action="complete" data-id="${due.id}">\u5DF2\u5B8C\u6210</button><button class="button quiet" type="button" data-action="close">\u6211\u77E5\u9053\u4E86</button></div>`);
-  if (state.listen) speak(`\u63D0\u9192\u65F6\u95F4\u5230\u4E86\uFF1A${due.title}`);
+  if (state.listen) speak(`\u63D0\u9192\u65F6\u95F4\u5230\u4E86\uFF1A${due.title}`, state.speechRate, false);
 }
 document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
@@ -2405,6 +2579,19 @@ document.addEventListener("click", (event) => {
   }
   if (action === "remove-shortcut") {
     void removeShortcut(button);
+    return;
+  }
+  if (action === "restore-shortcut") {
+    state.hiddenShortcuts = state.hiddenShortcuts.filter((key) => key !== button.dataset.key);
+    refresh("\u5DF2\u6062\u590D\u5230\u9996\u9875\u3002");
+    return;
+  }
+  if (action === "family-permission") {
+    showFamilyPermission(id);
+    return;
+  }
+  if (action === "reload-overview") {
+    void loadOverview();
     return;
   }
   if (action === "cloud-retry") {
@@ -2456,7 +2643,7 @@ document.addEventListener("click", (event) => {
       button.setAttribute("aria-pressed", String(state.listen));
       save();
       if (state.listen) speak("\u5DF2\u5F00\u542F\u542C\u56DE\u590D\u3002");
-      else window.speechSynthesis?.cancel();
+      else stopSpeech();
       break;
     }
     case "read":
@@ -2602,6 +2789,9 @@ document.addEventListener("submit", (event) => {
     case "family-shortcut":
       void submitShortcut(form, data);
       break;
+    case "family-permission":
+      void saveFamilyPermission(form, data);
+      break;
     case "join-family":
     case "share-family":
       void familyForm(form, data);
@@ -2659,6 +2849,8 @@ document.addEventListener("change", async (event) => {
     const custom = field.form.querySelector("[data-shortcut-custom]");
     custom.hidden = field.value !== "website";
     for (const input of custom.querySelectorAll("input")) input.required = !custom.hidden;
+    field.form.elements.title.required = !custom.hidden;
+    field.form.elements.target.disabled = custom.hidden;
     return;
   }
   if (field.name === "persona" && field.form?.dataset.form === "persona") {
@@ -2737,6 +2929,8 @@ function enterScreen(focus = false) {
   noteActivity();
   render();
   if (familyPages.includes(route)) void loadFamily();
+  if (route === "family-overview") void loadOverview();
+  else overview = null;
   if (focus) {
     window.scrollTo(0, 0);
     document.querySelector("#screen-title")?.focus({ preventScroll: true });
@@ -2746,7 +2940,7 @@ function enterScreen(focus = false) {
 window.addEventListener("hashchange", () => {
   if (dialog.open) dialog.close();
   recognition?.abort();
-  window.speechSynthesis?.cancel();
+  stopSpeech();
   route = readRoute();
   if (!cloudSite2 && location.hash === "#/legacy" && !authBusy) {
     void boot();
@@ -2757,7 +2951,10 @@ window.addEventListener("hashchange", () => {
 });
 document.addEventListener("visibilitychange", () => {
   noteActivity();
-  if (account && route === "elder" && document.visibilityState === "visible") void loadFamily();
+  if (account && document.visibilityState === "visible") {
+    if (route === "elder") void loadFamily();
+    if (route === "family-overview") void loadOverview();
+  }
   if (account) checkReminders();
 });
 window.addEventListener("pagehide", records.stopCamera);
@@ -2773,5 +2970,6 @@ window.addEventListener("beforeunload", (event) => {
 setInterval(() => {
   if (account) checkReminders();
 }, 1e4);
+window.speechSynthesis?.getVoices?.();
 if (!cloudSite2) cloudEntry();
 void boot();

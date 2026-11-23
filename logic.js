@@ -17,8 +17,14 @@ export function newState() {
   return {
     persona: '小禾', speechRate: 'normal', interests: '', contactName: '爸妈', phone: '', listen: false,
     monitoring: false, quietDays: 3, lastSeen: null, greeted: false,
-    reminders: [], shared: [], deviceGuides: [], guideRuns: {}, shortcuts: [], messages: { chat: [], ask: [], 'family-chat': [] },
+    reminders: [], shared: [], deviceGuides: [], guideRuns: {}, shortcuts: [], hiddenShortcuts: [], familyVisibility: [],
+    messages: { chat: [], ask: [], 'family-chat': [] },
   };
+}
+
+export function familyPermission(state, person) {
+  if (!Array.isArray(state.familyVisibility)) return undefined;
+  return state.familyVisibility.find((item) => item?.id === person.id && item.linkedAt === person.linkedAt);
 }
 
 export function dayStart(value) {

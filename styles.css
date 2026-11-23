@@ -67,6 +67,7 @@ svg { flex: 0 0 auto; vertical-align: middle; }
 .button.home-camera-button { min-height: 54px; padding-inline: 16px; font-size: 1.06rem; }
 .section-link { display: inline-flex; align-items: center; min-height: 48px; color: var(--green-dark); text-decoration: underline; text-underline-offset: 4px; font-weight: 650; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.section-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 12px; }
 
 .stack { display: grid; gap: 10px; }
 .tile, .contact-card, .care-card { display: flex; width: 100%; align-items: center; gap: 14px; text-align: left; padding: 13px 14px; border-radius: var(--radius); }
@@ -488,3 +489,12 @@ body:has(.app-nav) .toast { bottom: calc(var(--nav-height) + 10px); }
 .shortcut-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 4px; }
 .shortcut-row > div { display: grid; gap: 3px; overflow-wrap: anywhere; }
 .shortcut-row span { color: var(--muted); font-size: 0.89rem; }
+.shortcut-row .button { flex-shrink: 0; }
+.family-person > .section-actions { flex: 0 1 auto; min-width: 0; }
+.family-overview .overview-card { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: var(--card); }
+.overview-card > p { margin-top: 8px; }
+.overview-conversation { margin-top: 12px; }
+.overview-conversation h4 { margin: 0 0 7px; }
+.overview-conversation li { padding: 9px 0; overflow-wrap: anywhere; }
+.overview-conversation li p { margin: 6px 0 0; white-space: pre-wrap; }
+.overview-conversation time { margin-inline-start: 9px; color: var(--muted); font-size: 0.9rem; }
