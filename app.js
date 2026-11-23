@@ -1827,7 +1827,7 @@ function createElectricityCards({ api: api2, escapeHtml: escapeHtml2, pageHeader
 // phone-guide.js
 var phoneLessons = {
   android: {
-    font: ["\u8BF7\u6253\u5F00\u624B\u673A\u91CC\u7684\u201C\u8BBE\u7F6E\u201D\u3002", "\u5728\u8BBE\u7F6E\u91CC\u641C\u7D22\u201C\u5B57\u4F53\u5927\u5C0F\u201D\uFF0C\u70B9\u5F00\u5BF9\u5E94\u7684\u7ED3\u679C\u3002", "\u628A\u5B57\u53F7\u6ED1\u5757\u5F80\u53F3\u79FB\uFF0C\u76F4\u5230\u5B57\u80FD\u770B\u6E05\u3002"],
+    font: ["\u8BF7\u6253\u5F00\u624B\u673A\u91CC\u7684\u201C\u8BBE\u7F6E\u201D\u3002", "\u641C\u201C\u5B57\u4F53\u201D\uFF0C\u70B9\u201C\u5B57\u4F53\u5927\u5C0F\u201D\u6216\u201C\u5B57\u4F53\u5927\u5C0F\u4E0E\u7C97\u7EC6\u201D\u3002", "\u628A\u201C\u5B57\u4F53\u5927\u5C0F\u201D\u6ED1\u5757\u5F80\u53F3\u62D6\u3002\u5982\u679C\u6709\u4E24\u6761\uFF0C\u9009\u4E0A\u9762\u90A3\u6761\u3002"],
     wifi: ["\u8BF7\u6253\u5F00\u624B\u673A\u91CC\u7684\u201C\u8BBE\u7F6E\u201D\u3002", "\u627E\u5230\u201C\u65E0\u7EBF\u5C40\u57DF\u7F51\u201D\u6216\u201C\u65E0\u7EBF\u7F51\u7EDC\u201D\uFF0C\u628A\u5B83\u6253\u5F00\u3002", "\u70B9\u60A8\u8BA4\u8BC6\u7684\u7F51\u7EDC\u3002\u9700\u8981\u5BC6\u7801\u65F6\uFF0C\u5728\u624B\u673A\u5F39\u51FA\u7684\u8FDE\u63A5\u6846\u91CC\u8F93\u5165\u3002"]
   },
   iphone: {
@@ -1836,8 +1836,6 @@ var phoneLessons = {
   }
 };
 var phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
-var androidDownload = "https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.3";
-var launchAndroid = (path2) => `intent://phone/${path2}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidDownload)};end`;
 function quotedTapTarget(instruction) {
   if (/(?:不要|不用|别|不必|禁止)[^，。；]{0,6}(?:点|按)/.test(instruction)) return "";
   const taps = [...instruction.matchAll(/(?:点击|轻点|点按|点)(?:[击看开进]|(?:屏幕|页面)?(?:上方|下方|顶部|底部|左上角|右上角|左下角|右下角|左侧|右侧|中间)的?)?\s*[“「]([^”」]{1,28})[”」]/g)];
@@ -1906,12 +1904,10 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
   const button2 = (name, label) => `<button type="button" class="text-button" data-action="phone-${name}">${label}</button>`;
   const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
   function androidLinks(path2, ref) {
-    if (!/Android/i.test(navigator.userAgent)) return `<a class="text-button" href="${androidDownload}">\u4E0B\u8F7D\u79BE\u4F34\u5B89\u5353\u7248</a>`;
+    if (!/HebanAndroid\//.test(navigator.userAgent)) return "";
     const fullPath = path2 + (path2.includes("?") ? "&" : "?") + "ref=" + encodeURIComponent(ref);
-    const inHeban = /HebanAndroid\//.test(navigator.userAgent);
-    const href = esc(inHeban ? `heban-guide://phone/${fullPath}` : launchAndroid(fullPath));
-    return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">\u5F00\u542F\u8DE8\u5E94\u7528\u5F15\u5BFC</a>
-      ${inHeban ? "" : `<a class="text-button" href="${androidDownload}">\u4E0B\u8F7D\u79BE\u4F34\u5B89\u5353\u7248</a>`}</div>`;
+    const href = esc(`heban-guide://phone/${fullPath}`);
+    return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">\u5F00\u542F\u8DE8\u5E94\u7528\u5F15\u5BFC</a></div>`;
   }
   function directLink(question, ref) {
     return phoneTopic(question) === "font" ? androidLinks("font", ref) : "";
@@ -1959,7 +1955,7 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
       playNative(0);
       return;
     }
-    const audio = player = new Audio("./" + phoneAudio(platform, topic, index));
+    const audio = player = new Audio("./" + phoneAudio(platform, topic, index) + "?v=0.4");
     const weights = lines.map((text) => Array.from(text).length);
     const total = weights.reduce((sum, value) => sum + value, 0);
     audio.ontimeupdate = () => {

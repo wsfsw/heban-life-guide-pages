@@ -1,6 +1,6 @@
 export const phoneLessons = {
   android: {
-    font: ['请打开手机里的“设置”。', '在设置里搜索“字体大小”，点开对应的结果。', '把字号滑块往右移，直到字能看清。'],
+    font: ['请打开手机里的“设置”。', '搜“字体”，点“字体大小”或“字体大小与粗细”。', '把“字体大小”滑块往右拖。如果有两条，选上面那条。'],
     wifi: ['请打开手机里的“设置”。', '找到“无线局域网”或“无线网络”，把它打开。', '点您认识的网络。需要密码时，在手机弹出的连接框里输入。'],
   },
   iphone: {
@@ -10,8 +10,6 @@ export const phoneLessons = {
 };
 
 export const phoneAudio = (platform, topic, index) => `assets/phone-${platform}-${topic}-${index + 1}.mp3`;
-const androidDownload = 'https://wsfsw.github.io/heban-life-guide-pages/heban-screen-guide.apk?v=0.3';
-const launchAndroid = (path) => `intent://phone/${path}#Intent;scheme=heban-guide;package=cn.heban.guide;S.browser_fallback_url=${encodeURIComponent(androidDownload)};end`;
 
 function quotedTapTarget(instruction) {
   if (/(?:不要|不用|别|不必|禁止)[^，。；]{0,6}(?:点|按)/.test(instruction)) return '';
@@ -87,12 +85,10 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
   const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
 
   function androidLinks(path, ref) {
-    if (!/Android/i.test(navigator.userAgent)) return `<a class="text-button" href="${androidDownload}">下载禾伴安卓版</a>`;
+    if (!/HebanAndroid\//.test(navigator.userAgent)) return '';
     const fullPath = path + (path.includes('?') ? '&' : '?') + 'ref=' + encodeURIComponent(ref);
-    const inHeban = /HebanAndroid\//.test(navigator.userAgent);
-    const href = esc(inHeban ? `heban-guide://phone/${fullPath}` : launchAndroid(fullPath));
-    return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">开启跨应用引导</a>
-      ${inHeban ? '' : `<a class="text-button" href="${androidDownload}">下载禾伴安卓版</a>`}</div>`;
+    const href = esc(`heban-guide://phone/${fullPath}`);
+    return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">开启跨应用引导</a></div>`;
   }
 
   function directLink(question, ref) {
@@ -140,7 +136,7 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
     stop();
     const { platform, topic, index } = current;
     if (!topic) { playNative(0); return; }
-    const audio = player = new Audio('./' + phoneAudio(platform, topic, index));
+    const audio = player = new Audio('./' + phoneAudio(platform, topic, index) + '?v=0.4');
     const weights = lines.map((text) => Array.from(text).length);
     const total = weights.reduce((sum, value) => sum + value, 0);
     audio.ontimeupdate = () => {
