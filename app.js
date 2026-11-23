@@ -1904,12 +1904,13 @@ function createPhoneGuide({ caption, api: api2, esc, speak: speak2, stopSpeech: 
   const button2 = (name, label) => `<button type="button" class="text-button" data-action="phone-${name}">${label}</button>`;
   const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
   function androidLinks(path2) {
+    if (!/Android/i.test(navigator.userAgent)) return `<a class="text-button" href="${androidTrial}">\u5728\u5B89\u5353\u624B\u673A\u5B89\u88C5\u5C4F\u5E55\u5F15\u5BFC</a>`;
     const href = esc(launchAndroid(path2));
     return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">\u5F00\u542F\u8DE8\u5E94\u7528\u5F15\u5BFC</a>
       <a class="text-button" href="${androidTrial}">\u4E0B\u8F7D\u5B89\u88C5\u5305</a></div>`;
   }
   function directLink(question) {
-    return /Android/i.test(navigator.userAgent) && phoneTopic(question) === "font" ? androidLinks("font") : "";
+    return phoneTopic(question) === "font" ? androidLinks("font") : "";
   }
   function controls(id) {
     if (!visible || current?.id !== id) return "";
@@ -2536,11 +2537,10 @@ function chatScreen(mode) {
         ${featureCard({ link: "capture", title: "\u62CD\u7167\u95EE\u4E00\u95EE", subtitle: "\u62CD\u4E0B\u6309\u952E\u6216\u5C4F\u5E55", glyph: "camera", color: "blue" })}
         ${featureCard({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u770B\u5B58\u4E0B\u7684\u7167\u7247", glyph: "photo", color: "lilac" })}
       </div>`}
-    <div class="message-list" role="log" aria-label="\u804A\u5929\u8BB0\u5F55">${messages.map(renderMessage).join("")}
+    <div class="message-list" role="log" aria-label="\u804A\u5929\u8BB0\u5F55">${renderChatMessages(messages, mode)}
       ${waiting ? '<p class="assistant-wait" role="status">\u79BE\u4F34\u6B63\u5728\u56DE\u7B54\u2026</p>' : ""}
       ${failure?.account === account ? `<div class="assistant-retry"><p role="alert">${escapeHtml(failure.error.message)}</p>
         <button type="button" class="button quiet" data-action="assistant-retry">\u518D\u95EE\u4E00\u6B21</button>
-        ${mode === "ask" && phoneTopic(failure.text) ? phoneGuideButton(failure.questionId) : ""}
         ${direct ? `<a class="button quiet" href="${escapeHtml(direct)}" target="_blank" rel="noopener">\u76F4\u63A5\u6253\u5F00\u52A9\u624B</a>` : ""}
         ${mode === "ask" ? '<a class="section-link" href="#/guides">\u5148\u770B\u64CD\u4F5C\u6B65\u9AA4</a>' : ""}</div>` : ""}
     </div>
@@ -2552,17 +2552,29 @@ function chatScreen(mode) {
     </div></main>`;
 }
 function phoneGuideButton(questionId) {
+  const question = state.messages.ask.find((item) => item.role === "user" && item.id === questionId);
+  if (!question) return "";
   const guide = phoneGuide.controls(questionId);
   if (guide) return guide;
-  const question = state.messages.ask.find((item) => item.role === "user" && item.id === questionId)?.text;
-  return `${question ? phoneGuide.directLink(question) : ""}<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
+  return `${phoneGuide.directLink(question.text)}<button class="button quiet phone-offer" type="button" data-action="open-phone-guide" data-id="${escapeHtml(questionId)}">${icon("sound", 20)}\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A</button>`;
 }
-function renderMessage(message) {
+function renderChatMessages(messages, mode) {
+  let question;
+  return messages.map((message, index) => {
+    if (message.role === "user") {
+      question = message;
+      const unanswered = messages[index + 1]?.role !== "assistant";
+      return renderMessage(message, mode === "ask" && unanswered && phoneTopic(message.text) ? message.id : "");
+    }
+    const guideId = mode === "ask" ? message.guideFor || (question && phoneTopic(question.text) ? question.id : "") : "";
+    question = null;
+    return renderMessage(message, guideId);
+  }).join("");
+}
+function renderMessage(message, guideId = "") {
   const tools = [];
   if (message.role === "assistant") tools.push(`<button class="message-action" type="button" data-action="read" data-text="${escapeHtml(message.text)}" aria-label="\u6717\u8BFB\u8FD9\u6761\u56DE\u590D">${icon("sound", 17)}\u6717\u8BFB</button>`);
-  if (route === "ask" && message.guideFor && state.messages.ask.some((item) => item.role === "user" && item.id === message.guideFor)) {
-    tools.push(phoneGuideButton(message.guideFor));
-  }
+  if (guideId) tools.push(phoneGuideButton(guideId));
   if (route === "ask" && message.role === "user") {
     tools.push(`<button class="message-action" type="button" data-action="share" data-id="${message.id}">\u5206\u4EAB\u7ED9\u5BB6\u4EBA</button>`);
   }
@@ -3291,10 +3303,15 @@ async function sendMessage(text, retry = false) {
   const draft = /提醒|叫我|记得/.test(input) ? parseReminder(input) : null;
   const validDraft = draft?.title && draft.at > Date.now() ? draft : null;
   let reply;
-  let offerPhoneGuide = false;
+  const localTopic = mode === "ask" ? phoneTopic(input) : "";
+  let offerPhoneGuide = Boolean(localTopic);
   let failure;
   if (validDraft) reply = `\u63D0\u9192\u5DF2\u7ECF\u586B\u597D\uFF1A${formatWhen(validDraft.at)}\uFF0C${validDraft.title}\u3002\u8BF7\u6838\u5BF9\u4E00\u4E0B\uFF0C\u518D\u4FDD\u5B58\u3002`;
-  else {
+  else if (/^(您好|你好|哈喽|嗨|hello|hi)[！!。？?，,.\s]*$/i.test(input)) {
+    reply = "\u60A8\u597D\uFF01\u60A8\u60F3\u529E\u4EC0\u4E48\u4E8B\uFF1F\u53EF\u4EE5\u8BF4\u51FA\u6765\uFF0C\u4E5F\u53EF\u4EE5\u5728\u4E0B\u65B9\u6253\u5B57\u3002";
+  } else if (localTopic) {
+    reply = localTopic === "font" ? "\u6211\u5E26\u60A8\u628A\u624B\u673A\u7684\u5B57\u8C03\u5927\u3002\u70B9\u4E0B\u9762\u7684\u300C\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A\u300D\uFF0C\u5C31\u53EF\u4EE5\u5F00\u59CB\u3002" : "\u6211\u5E26\u60A8\u8FDE\u4E0A\u65E0\u7EBF\u7F51\u3002\u70B9\u4E0B\u9762\u7684\u300C\u542C\u7740\u4E00\u6B65\u4E00\u6B65\u505A\u300D\uFF0C\u5C31\u53EF\u4EE5\u5F00\u59CB\u3002";
+  } else {
     pendingReplies.set(mode, active);
     save();
     render();
@@ -3302,7 +3319,7 @@ async function sendMessage(text, retry = false) {
     try {
       const result = await askAssistant({ text: input, history: history2, style: state.persona, ...mode === "ask" ? { suggestPhoneGuide: true } : {} });
       reply = result.answer;
-      offerPhoneGuide = mode === "ask" && (result.offerPhoneGuide === true || Boolean(phoneTopic(input)));
+      offerPhoneGuide = mode === "ask" && result.offerPhoneGuide === true;
       if (!reply) throw new Error("\u6CA1\u6709\u6536\u5230\u56DE\u590D\u3002");
     } catch (error) {
       failure = error;

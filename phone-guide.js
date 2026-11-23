@@ -85,13 +85,14 @@ export function createPhoneGuide({ caption, api, esc, speak, stopSpeech, render 
   const ready = () => visible && current?.steps?.length && current.index < current.steps.length;
 
   function androidLinks(path) {
+    if (!/Android/i.test(navigator.userAgent)) return `<a class="text-button" href="${androidTrial}">在安卓手机安装屏幕引导</a>`;
     const href = esc(launchAndroid(path));
     return `<div class="phone-background-actions"><a class="button" data-action="phone-handoff" href="${href}">开启跨应用引导</a>
       <a class="text-button" href="${androidTrial}">下载安装包</a></div>`;
   }
 
   function directLink(question) {
-    return /Android/i.test(navigator.userAgent) && phoneTopic(question) === 'font' ? androidLinks('font') : '';
+    return phoneTopic(question) === 'font' ? androidLinks('font') : '';
   }
 
   function controls(id) {
