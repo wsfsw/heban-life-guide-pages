@@ -2135,6 +2135,7 @@ var repeats = { never: "\u53EA\u63D0\u9192\u4E00\u6B21", daily: "\u6BCF\u5929\u6
 var symbol = {
   home: '<path d="M3 10.8 10.3 4.5a2.6 2.6 0 0 1 3.4 0L21 10.8M4.8 9.4v9.1a2 2 0 0 0 2 2h10.4a2 2 0 0 0 2-2V9.4"/><path fill="currentColor" stroke-width="1.1" d="M12 16.8 9 14a1.8 1.8 0 0 1 2.5-2.6l.5.5.5-.5A1.8 1.8 0 0 1 15 14z"/>',
   people: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2zm2-6a4 4 0 0 1 4 4v2m-4-17a4 4 0 0 1 0 8"/><circle cx="9" cy="8" r="4"/>',
+  person: '<circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/>',
   heart: '<path d="M20.8 5.8a4.8 4.8 0 0 0-6.8 0l-2 2-2-2a4.8 4.8 0 0 0-6.8 6.8l8.8 8.5 8.8-8.5a4.8 4.8 0 0 0 0-6.8z"/>',
   bell: '<path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0M12 1v2"/>',
   question: '<circle cx="12" cy="12" r="9.5"/><path d="M9 9a3 3 0 1 1 4.4 2.7c-.9.5-1.4 1.1-1.4 2.3m0 3h.01"/>',
@@ -2155,6 +2156,7 @@ var symbol = {
   photo: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.5"/><path d="m3 17 5-4 4 3 4-6 5 5"/>',
   camera: '<path d="M8 6 9.4 4h5.2L16 6h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/><circle cx="12" cy="13" r="3.1"/>',
   parcel: '<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18m-12-2h6m-4 7h2"/>',
+  download: '<path d="M12 3v12m-4-4 4 4 4-4M5 16v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/>',
   bill: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6m-6 4h6m-6 4h4"/>'
 };
 var icon = (name, size = 24) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${symbol[name]}</svg>`;
@@ -2390,24 +2392,34 @@ function bottomNav() {
   </nav>`;
 }
 function mineScreen() {
+  const storageLabel = account.guest ? account.temporary ? "\u672C\u6B21\u6D4F\u89C8\u53EF\u7528" : "\u8BB0\u5F55\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668" : "\u8BB0\u5F55\u4FDD\u5B58\u5230\u4E91\u7AEF";
   return `${pageHeader("\u6211\u7684", "elder")}<main class="surface mine-screen">
-    <div class="profile-card tone-blue"><span class="feature-icon">${icon("people", 28)}</span>
-      <div><h2>${escapeHtml(account.name)}</h2><p>${account.guest ? account.temporary ? "\u672C\u6B21\u6D4F\u89C8\u53EF\u7528" : "\u8BB0\u5F55\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668" : "\u8BB0\u5F55\u4FDD\u5B58\u5230\u4E91\u7AEF"}</p></div>
-      ${account.guest ? loginAction("\u767B\u5F55") : '<button class="button quiet" data-action="account-signout" type="button">\u9000\u51FA\u767B\u5F55</button>'}
-    </div>
-    <section class="profile-card tone-blue" aria-labelledby="android-download-title">
-      <div><h2 id="android-download-title">\u79BE\u4F34\u5B89\u5353\u5B89\u88C5\u5305</h2><p>\u7248\u672C ${androidRelease} \xB7 \u652F\u6301\u8DE8\u5E94\u7528\u5C4F\u5E55\u5F15\u5BFC</p>
-        ${installedAndroid ? `<p>\u5F53\u524D\u5DF2\u5B89\u88C5 ${installedAndroid}${installedAndroid === androidRelease ? "" : "\u3002\u70B9\u4E0A\u65B9\u300C\u7528\u6D4F\u89C8\u5668\u6253\u5F00\u300D\u53EF\u4EE5\u4E0B\u8F7D\u65B0\u7248\u3002"}</p>` : ""}
+    <section class="mine-panel mine-account tone-blue" aria-labelledby="mine-account-title">
+      <div class="mine-panel-title">
+        <span class="feature-icon">${icon("person", 28)}</span>
+        <div><h2 id="mine-account-title">${escapeHtml(account.name)}</h2><p>${storageLabel}</p></div>
+      </div>
+      ${account.guest ? loginAction("\u767B\u5F55", "button quiet") : '<button class="button quiet" data-action="account-signout" type="button">\u9000\u51FA\u767B\u5F55</button>'}
+    </section>
+    <section class="mine-tools" aria-labelledby="mine-tools-title">
+      <h2 id="mine-tools-title">\u5E38\u7528\u529F\u80FD</h2>
+      <div class="feature-grid">
+        ${featureCard({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u67E5\u770B\u4FDD\u5B58\u7684\u7167\u7247", glyph: "photo", color: "blue" })}
+        ${featureCard({ link: "reminders", title: "\u6211\u7684\u63D0\u9192", subtitle: "\u67E5\u770B\u6216\u4FEE\u6539\u63D0\u9192", glyph: "bell", color: "peach" })}
+        ${featureCard({ link: "assistant-settings/mine", title: "\u52A9\u624B\u8BBE\u7F6E", subtitle: "\u8C03\u6574\u6717\u8BFB\u8BED\u901F", glyph: "tune", color: "lilac" })}
+        ${featureCard({ link: "connections", title: "\u548C\u5BB6\u4EBA\u5206\u4EAB", subtitle: "\u8BBE\u7F6E\u5206\u4EAB\u8303\u56F4", glyph: "people", color: "mint" })}
+      </div>
+      ${tile({ link: "family", title: "\u5BB6\u5C5E\u7AEF", subtitle: "\u8054\u7CFB\u5BB6\u4EBA\u3001\u5236\u4F5C\u8BBE\u5907\u5361", glyph: "heart" })}
+    </section>
+    <section class="mine-panel mine-download tone-blue" aria-labelledby="android-download-title">
+      <div class="mine-panel-title">
+        <span class="feature-icon">${icon("download", 25)}</span>
+        <div><h2 id="android-download-title">\u79BE\u4F34\u5B89\u5353\u5B89\u88C5\u5305</h2><p>\u7248\u672C ${androidRelease} \xB7 \u652F\u6301\u8DE8\u5E94\u7528\u5C4F\u5E55\u5F15\u5BFC</p>
+          ${installedAndroid ? `<p>\u5F53\u524D\u5DF2\u5B89\u88C5 ${installedAndroid}${installedAndroid === androidRelease ? "" : "\u3002\u70B9\u4E0A\u65B9\u300C\u7528\u6D4F\u89C8\u5668\u6253\u5F00\u300D\u53EF\u4EE5\u4E0B\u8F7D\u65B0\u7248\u3002"}</p>` : ""}
+        </div>
       </div>
       ${installedAndroid ? "" : `<a class="button" href="./heban-screen-guide.apk?v=${androidRelease}" download="Heban-${androidRelease}.apk">\u4E0B\u8F7D\u5B89\u88C5\u5305</a>`}
     </section>
-    <div class="app-list">
-      ${tile({ link: "records", title: "\u6211\u7684\u8BB0\u5F55", subtitle: "\u770B\u770B\u5B58\u4E0B\u7684\u7167\u7247", glyph: "photo" })}
-      ${tile({ link: "reminders", title: "\u6211\u7684\u63D0\u9192", subtitle: "\u770B\u65F6\u95F4\uFF0C\u4E5F\u53EF\u4EE5\u6539\u65F6\u95F4", glyph: "bell" })}
-      ${tile({ link: "assistant-settings/mine", title: "\u52A9\u624B\u8BBE\u7F6E", subtitle: "\u53EF\u4EE5\u8BA9\u52A9\u624B\u8BFB\u6162\u4E00\u70B9", glyph: "tune" })}
-      ${tile({ link: "connections", title: "\u548C\u5BB6\u4EBA\u5206\u4EAB", subtitle: "\u9009\u62E9\u5BB6\u4EBA\u80FD\u770B\u5230\u7684\u5185\u5BB9", glyph: "people" })}
-      ${tile({ link: "family", title: "\u5BB6\u5C5E\u7AEF", subtitle: "\u8054\u7CFB\u5BB6\u4EBA\u3001\u5236\u4F5C\u8BBE\u5907\u5361", glyph: "heart" })}
-    </div>
   </main>`;
 }
 function familyHome() {

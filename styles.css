@@ -419,9 +419,42 @@ body:has(.app-nav) .toast { bottom: calc(var(--nav-height) + 10px); }
 .app-list { display: grid; gap: 9px; }
 .home-shortcuts { margin-top: 12px; }
 .family-tools { margin-block: 14px; }
-.profile-card { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 15px; padding: 15px; border-radius: var(--radius); background: var(--tone-bg); }
-.profile-card > div { flex: 1 1 135px; min-width: 0; overflow-wrap: anywhere; }
-.profile-card > div p { margin-top: 4px; color: var(--muted); font-size: 0.9rem; }
+.mine-screen { display: grid; gap: 20px; }
+.mine-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.mine-panel-title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 9rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mine-panel-title p { margin-top: 4px; color: var(--muted); font-size: 0.89rem; line-height: 1.4; }
+.mine-account { background: var(--tone-bg); }
+.mine-account .button { background: var(--card); border-color: var(--line); }
+.mine-account .button:hover { border-color: var(--tone-icon); }
+.mine-tools { display: grid; gap: 10px; }
+.mine-tools .feature-card { min-height: 114px; }
+.mine-tools .tile { min-height: 72px; padding-block: 11px; }
+.mine-tools .tile-icon { width: 43px; height: 43px; border-radius: 12px; }
+.mine-tools .tile-icon svg { width: 25px; height: 25px; }
+.mine-tools .tile-text strong, .mine-download h2 { font-size: 1.1rem; }
+.mine-download { background: var(--card); }
+.mine-download .mine-panel-title { flex-basis: 14rem; }
+.mine-download .feature-icon { background: var(--tone-bg); }
+
+@media (max-width: 26rem) {
+  .mine-download .button { width: 100%; }
+}
 
 .assistant-tabs { display: flex; align-self: flex-start; gap: 4px; padding: 4px; border-radius: 14px; background: #e6ebfb; }
 .assistant-tabs a { min-height: 44px; display: grid; place-items: center; border-radius: 11px; padding-inline: 13px; font-weight: 660; color: var(--muted); }
